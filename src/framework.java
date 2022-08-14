@@ -37,7 +37,7 @@ public class framework {
                                         //System.out.println("---" + parameterName);
                                         if(parameterName.equals("\"AndroidManifest.xml\"")){
                                             Value entry = as.getLeftOp();
-                                            System.out.println(entry);
+                                            //System.out.println(entry);
                                             System.out.println(as);
                                         }
                                     }
