@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="Maven: de.upb.cs.swt:heros:1.2.3-SNAPSHOT">
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/de/upb/cs/swt/heros/1.2.3-SNAPSHOT/heros-1.2.3-20211229.141052-5.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/de/upb/cs/swt/heros/1.2.3-SNAPSHOT/heros-1.2.3-20211229.141052-5-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES>
+      <root url="jar://$MAVEN_REPOSITORY$/de/upb/cs/swt/heros/1.2.3-SNAPSHOT/heros-1.2.3-20211229.141052-5-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>
