@@ -4,78 +4,24 @@ import soot.*;
 import soot.jimple.*;
 import soot.jimple.spark.ondemand.pautil.SootUtil;
 import soot.options.Options;
+import soot.toolkits.graph.CompleteBlockGraph;
+import soot.toolkits.graph.TrapUnitGraph;
+import soot.toolkits.scalar.Pair;
 
+import java.io.IOException;
 import java.util.*;
 
 public class framework {
     public static final String path = "/data/disk_16t_2/leiry/framework.apk";
-    public static final String path_test = "test";
+    public static final String path_test = "test_java";
 
-    public static void main(String[] args) {
-        sootInitial(path);
-        Map<List<SootMethod>, String> callPathToType =new HashMap<List<SootMethod>, String>();
-        Map<SootMethod, Value> entries = findEntryPoints();
-        Iterator it = entries.keySet().iterator();
-        while(it.hasNext()){
-            SootMethod sm = (SootMethod) it.next();
-            Value v = entries.get(sm);
-            Body body = sm.retrieveActiveBody();
-            for(Unit unit:body.getUnits()){
-            }
-        }
-         //String className = "android.content.pm.parsing.component.ParsedComponentUtils";
-         //String methodName = "addMetaData";
-        String className = "android.content.pm.parsing.ParsingPackageUtils";
-        String methodName = "parseUsesPermission";
-        //String methodSig = "<java.lang.Math: int max(int,int)>";
-        //Body body = Utility.getBodyOfMethod(methodSig);
-        //System.out.println(body);
-        List<Body> bodies = Utility.getBodyOfMethod(className, methodName);
-        for(Body body:bodies){
-            //System.out.println(body);
-            for(Unit unit : body.getUnits()){
-                InvokeExpr invoke = Utility.getCallee(unit);
-                if(invoke != null){
-                    if(invoke instanceof StaticInvokeExpr){
-                        StaticInvokeExpr si = (StaticInvokeExpr) invoke;
-                        //System.out.println(unit);
-                        if(unit instanceof AssignStmt){
-                            AssignStmt as = (AssignStmt) unit;
-                            Value a = as.getLeftOp();
-                            //System.out.println(a.getType().toString());
-                        }
-                    }
-                }
-            }
-            for(Unit unit:body.getUnits()){
-                InvokeExpr invoke = Utility.getCallee(unit);
-                if(invoke!=null){
-                    String calleeName = Utility.getNameOfCallee(invoke);
-                    //System.out.println(calleeName);
-                    if(calleeName.equals("parseRequiredFeature")){
-                        System.out.println("---" + unit);
-                        AssignStmt as = (AssignStmt) unit;
-                        //String calleeSig=Utility.getSignatureOfCallee(invoke);
-                        //System.out.println(as.getUseAndDefBoxes());
-                        for(ValueBox vb : as.getUseBoxes()){
-                            Value v = vb.getValue();
-                            System.out.println(v.equals(v));
-                            //System.out.println();
-                        }
-                        //Body b = Utility.getBodyOfMethod(calleeSig);
-                        //System.out.println(b);
-                       // for(Unit u : b.getUnits()){
-                            //System.out.println(u.getDefBoxes());
-                        //}
-                        break;
-                    }
-                }
-            }
-        }
-/*        SootClass cls = Scene.v().getSootClassUnsafe("android.content.pm.parsing.component.ParsedComponent");
-        for(SootField sf : cls.getFields()){
-            System.out.println(sf.getDeclaration());
-        }*/
+    public static void main(String[] args) throws IOException, InterruptedException {
+        //sootInitial(path);
+        //Map<List<SootMethod>, String> callPathToType =new HashMap<List<SootMethod>, String>();
+        test5();
+        //test1();
+
+
     }
 
     private static void sootInitial(String apkPath) {
@@ -109,56 +55,147 @@ public class framework {
         Scene.v().loadNecessaryClasses();
     }
 
-    private static void test(){
-        List<Body> bodies = Utility.getBodyOfMethod("test", "testSample");
-        for(Body body : bodies){
-            System.out.println(body);
-        }
-    }
-
-    private static Map<SootMethod, Value> findEntryPoints(){
-        Map<SootMethod, Value> entries = new HashMap<SootMethod,Value>();
-        String className = "android.content.pm.parsing.ParsingPackageUtils"; // the class for parsing an apk
-        List<SootMethod> methods = Utility.getMethodsOfClass(className);
-        for(SootMethod sm : methods){
-            if(sm.isConcrete()){
-                Body body = sm.retrieveActiveBody();
-                for(Unit unit:body.getUnits()) {
-                    InvokeExpr callee = Utility.getCallee(unit);
-                    if (callee != null) {
-                        // find the entry point
-                        String calleeName = callee.getMethod().getName();
-                        if (calleeName.equals("openXmlResourceParser")) {
-                            //System.out.println(callee.getMethod().getSignature());
-                            for (Value v : callee.getArgs()) {
-                                if (v instanceof StringConstant) {
-                                    String parameterName = v.toString();
-                                    if (parameterName.equals("\"AndroidManifest.xml\"")) {
-                                        //System.out.println(cls);
-                                        //System.out.println(sm);
-                                        //System.out.println(unit);
-                                        //System.out.println("\n");
-                                        //AssignStmt as = (AssignStmt) unit;
-                                        //System.out.println(as);
-                                        //InvokeExpr invoke = as.getInvokeExpr();
-                                        //VirtualInvokeExpr vi = (VirtualInvokeExpr) invoke;
-                                        //System.out.println("===" + vi.getBase());
-                                        //Value entry = as.getLeftOp();
-                                        //for(ValueBox vb : as.getUseBoxes()){
-                                            //System.out.println(vb.getValue());
-                                        //}
-                                        //entries.put(sm, entry);
-                                        //System.out.println("----"+entry);
-                                        //System.out.println(body);
-                                    }
-                                }
-                            }
-                        }
-                    }
+    // analyse test.java
+    private static void test() {
+        sootInitial_test(path_test);
+/*        SootClass cls =Scene.v().getSootClassUnsafe("test");
+        for(SootMethod sm : cls.getMethods()){
+            for(Unit unit: sm.retrieveActiveBody().getUnits()){
+                if(unit instanceof InvokeStmt){
+                    InvokeExpr i = ((InvokeStmt) unit).getInvokeExpr();
                 }
             }
+        }*/
+        List<Body> bodies = Utility.getBodyOfMethod("test", "testSample");
+        for (Body body : bodies) {
+            System.out.println(body);
+            //CompleteBlockGraph tug = new CompleteBlockGraph(body);
+            //System.out.println(tug);
+            /*for(Unit unit : body.getUnits()){
+                if (unit instanceof IfStmt){
+                    IfStmt is = (IfStmt) unit;
+                    System.out.println(is.getCondition());
+                }
+                if(unit instanceof GotoStmt){
+                    GotoStmt gs = (GotoStmt) unit;
+                    UnitBox ub = gs.getTargetBox();
+                    System.out.println(ub.getUnit());
+                    System.out.println(gs.getTarget());
+                }
+            }*/
         }
-        return entries;
     }
 
+
+    // find the methods related to the entry point
+    private static void test1() {
+        List<String> skip_methods = new ArrayList<>();
+        String[] names = {"obtainAttributes", "skipCurrentTag", "Max", "Min", "append"};
+        for (String name : names) {
+            skip_methods.add(name);
+        }
+        List<SootMethod> analysed_methods = new ArrayList<>();
+        Tainted.findEntryPoints();
+
+        while (!Tainted.tainted_methods.isEmpty()) {
+            Pair<SootMethod, Value> first = Tainted.tainted_methods.poll();
+            SootMethod tainted_method = first.getO1();
+            System.out.println("=========================================================");
+            System.out.println("method: " + tainted_method);
+            if (analysed_methods.contains(tainted_method)){
+                System.out.println("This method is analysed.");
+                continue;
+            }
+            analysed_methods.add(tainted_method);
+            Value tainted_value = first.getO2();
+            System.out.println("value: " + tainted_value);
+            //Tainted.findTaintedMethods(tainted_method, tainted_value, skip_methods);
+        }
+    }
+
+    // print body
+    // given class name and method name
+    public static void test2() {
+        //String className = "android.content.pm.parsing.component.ParsedComponentUtils";
+        //String methodName = "addMetaData";
+        String className = "android.content.pm.parsing.ParsingPackageUtils";
+        String methodName = "parseBaseApk";
+        List<Body> bodies = Utility.getBodyOfMethod(className, methodName);
+        for (Body body : bodies) {
+            //CompleteBlockGraph tug = new CompleteBlockGraph(body);
+            //System.out.println(tug);
+            System.out.println("++++" + body);
+        }
+    }
+
+    // print body
+    // given method signature
+    private static void test3() {
+        String methodSig = "<android.content.pm.parsing.component.ParsedComponentUtils: android.content.pm.parsing.result.ParseResult addMetaData(android.content.pm.parsing.component.ParsedComponent,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>";
+        SootMethod sm = Scene.v().getMethod(methodSig);
+        //Integer index = 1;
+        //System.out.println(Utility.transfer(sm, index));
+        Body body = Utility.getBodyOfMethod(methodSig);
+        //System.out.println(body);
+        for(Unit unit : body.getUnits()){
+            System.out.println(unit);
+            /*if (unit instanceof IfStmt){
+                IfStmt is = (IfStmt) unit;
+                System.out.println(is.getCondition());
+            }
+            if(unit instanceof GotoStmt){
+                GotoStmt gs = (GotoStmt) unit;
+                UnitBox ub = gs.getTargetBox();
+                System.out.println(ub.getUnit());
+                System.out.println(gs.getTarget());
+            }*/
+            if(unit instanceof AssignStmt){
+                AssignStmt as = (AssignStmt) unit;
+                System.out.println(as.getUseBoxes());
+                System.out.println(as.getDefBoxes());
+            }
+        }
+        /*for(Unit unit: body.getUnits()){
+            System.out.println(unit);
+            //System.out.println(unit instanceof IdentityStmt);
+            if(unit instanceof IdentityStmt){
+                IdentityStmt is = (IdentityStmt) unit;
+                System.out.println(is.getRightOp().toString().contains("@parameter0:"));
+            }
+            for(ValueBox vb : unit.getUseBoxes()){
+                System.out.println(vb.getValue().toString().contains("@parameter"));
+            }
+        }*/
+    }
+
+    private static void test4() {
+        SootClass cls = Scene.v().getSootClassUnsafe("android.content.pm.parsing.ParsingPackageUtils");
+        for (SootField sf : cls.getFields()) {
+            System.out.println("--" + sf.getDeclaration());
+        }
+    }
+
+    public static void test5() throws IOException, InterruptedException {
+        /*Tainted.test.offer("a");
+        Tainted.test.offer("b");
+        while (!Tainted.test.isEmpty()) {
+            System.out.println("size: " + Tainted.test.size());
+            String first = Tainted.test.poll();
+            System.out.println("first: " + first);
+            System.out.println("size: " + Tainted.test.size());
+            String s = first + "c";
+            Tainted.test.offer(s);
+            Thread.sleep(2000);
+        }*/
+        /*String data1 = "test1";
+        Store.logData("test.txt", data1);
+        String data2 = "test2";
+        Store.logData("test.txt", data2);*/
+        InvokeExpr i = null;
+        System.out.println(Utility.getBaseOfInvokeExpr(i));
+        AssignStmt as = null;
+        System.out.println(Utility.isParameter(i, null));
+
+    }
 }
+
