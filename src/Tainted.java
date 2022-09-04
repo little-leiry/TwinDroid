@@ -58,20 +58,30 @@ public class Tainted {
         return false;
     }*/
 
-    public static void generateAndLogCallPaths(SootMethod method, int flag){
+    public static void generateCallPathsAndLogData(SootMethod method, Value data_structure, int flag){
         if(flag == 0) { // Only consider the nearest elements.
             if (elementToMethod.containsValue(method)){
                 List<String> elements = getElementsOfMethod(method, null);
+                for(String e: elements){
+                    storeElementAndCorrespondingDataStructure(e, data_structure);
+                }
                 Store.logData(log_file, "element(s):");
                 Store.logData(log_file, elements.toString());
+                Store.logData(log_file, "data structure:");
+                if (data_structure.toString().contains(".<")) { // r0.<android.content.pm.parsing.component.ParsedComponent: java.util.List intents> = $r2
+                    Store.logData(log_file, data_structure.toString());
+                } else {
+                    Store.logData(log_file, data_structure.getType().toString());
+                }
                 flag = 1;
             }
         }
+
         call_path.add(method.getSignature());
         if(methodToParents.containsKey(method)){
             List<SootMethod> parents = methodToParents.get(method);
             for(SootMethod p : parents){
-                generateAndLogCallPaths(p, flag);
+                generateCallPathsAndLogData(p, data_structure, flag);
             }
             call_path.remove(method.getSignature());
         }else{
@@ -119,13 +129,15 @@ public class Tainted {
         } else{ // Strange situation: one element may have different parsing methods.
             SootMethod old_method = elementToMethod.get(element);
             if(! old_method.equals(method)) {
+                Utility.printSymbols("!");
                 System.out.println("The corresponding method of this element already exists: " + element + " => " + elementToMethod.get(element));
                 System.out.println("Current method is " + method.getName());
+                Utility.printSymbols("!");
             }
         }
     }
 
-    public static void storeElementAndCorrespondingDataStructures(String element, Value data_structure){
+    public static void storeElementAndCorrespondingDataStructure(String element, Value data_structure){
         List<Value> ds = elementToDataStructures.get(element);
         if (ds == null) { // This key does not exist.
             ds = new ArrayList<>();
@@ -348,7 +360,7 @@ public class Tainted {
                             data_structure = tainted_value;
                             List<String> es = getElementsOfMethod(parseMethod, elements); // The obtained elements are related to the parse method and the entry method.
                             for (String e : es) {
-                                storeElementAndCorrespondingDataStructures(e, data_structure);
+                                storeElementAndCorrespondingDataStructure(e, data_structure);
                                 storeMethodAndCorrespondingElement_DataStructure(entry_method, e, data_structure);
                             }
                         }
@@ -436,7 +448,7 @@ public class Tainted {
             if (parseMethod != null){ // The last parsed result.
                 List<String> es = getElementsOfMethod(parseMethod, elements);
                 for(String e: es) {
-                    storeElementAndCorrespondingDataStructures(e, data_structure);
+                    storeElementAndCorrespondingDataStructure(e, data_structure);
                     storeMethodAndCorrespondingElement_DataStructure(entry_method, e, data_structure);
                 }
             } else {
@@ -460,15 +472,15 @@ public class Tainted {
                 if(!e.equals("NULL")){
                     Store.logData(log_file, "element:");
                     Store.logData(log_file, e);
-                    generateAndLogCallPaths(entry_method, 0);
+                    generateCallPathsAndLogData(entry_method, d, 0);
                 } else {
-                    generateAndLogCallPaths(entry_method, 1);
-                }
-                Store.logData(log_file, "data structure:");
-                if (data_structure.toString().contains(".<")) { // r0.<android.content.pm.parsing.component.ParsedComponent: java.util.List intents> = $r2
-                    Store.logData(log_file, data_structure.toString());
-                } else {
-                    Store.logData(log_file, data_structure.getType().toString());
+                    generateCallPathsAndLogData(entry_method, d, 1);
+                    Store.logData(log_file, "data structure:");
+                    if (data_structure.toString().contains(".<")) { // r0.<android.content.pm.parsing.component.ParsedComponent: java.util.List intents> = $r2
+                        Store.logData(log_file, data_structure.toString());
+                    } else {
+                        Store.logData(log_file, data_structure.getType().toString());
+                    }
                 }
             }
         }

@@ -364,7 +364,7 @@ public class framework {
         String s1 = "intent-filter";
         String s2 = "parseIntentFilter";
         System.out.println(Utility.areRelatedNames(s1, s2));*/
-        /*List<String> p1 = new ArrayList<>();
+        List<String> p1 = new ArrayList<>();
         p1.add("b");
         p1.add("c");
         methodToParents.put("a", p1);
@@ -375,28 +375,32 @@ public class framework {
         List<String> p3 = new ArrayList<>();
         p3.add("f");
         methodToParents.put("c", p3);
-        generateCallPaths("a");
+        generateCallPaths("a", 1);
         System.out.println("call paths: " + call_paths);
-        System.out.println(call_path);*/
+        System.out.println(call_path);
         //System.out.println(Utility.isNumeric("000"));
        //Utility.printSymbols("-");
-        Pair<String, String> p1 = new Pair<>("a", "b");
+        /*Pair<String, String> p1 = new Pair<>("a", "b");
         Pair<String, String> p2 = new Pair<>("a", "b");
         System.out.println(p1.equals(p2));
         List<Pair<String, String>> p = new ArrayList<>();
         p.add(p1);
         System.out.println(p.contains(p2));
-        System.out.println(p1==p2);
+        System.out.println(p1==p2);*/
     }
 
-    public static void generateCallPaths(String method_sig){
+    public static void generateCallPaths(String method_sig, int flag){
         System.out.println("-----------------------------");
+        if(flag == 0){
+            System.out.println("This is 0.");
+            flag =1;
+        }
         call_path.add(method_sig);
         if(methodToParents.containsKey(method_sig)){
             List<String> parents = methodToParents.get(method_sig);
             for(String p : parents){
                 System.out.println("method: " + method_sig + " => " + " parent: " + p);
-                generateCallPaths(p);
+                generateCallPaths(p, 1);
             }
             call_path.remove(method_sig);
         }else{
