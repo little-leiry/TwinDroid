@@ -3,13 +3,14 @@ import soot.*;
 import soot.jimple.*;
 import soot.toolkits.scalar.Pair;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utility {
 
+    // One abstract class may be implemented by multiple classes.
+    public static Map<SootClass, Set<SootClass>> abstractClassToImplementedClasses = new HashMap<SootClass, Set<SootClass>>();
     public Utility() {
     }
 
@@ -79,7 +80,7 @@ public class Utility {
         return null;
     }
 
-    public static Value transfer(SootMethod method, Integer parameter_index) {
+    public static Value getParameter(SootMethod method, Integer parameter_index) {
         if(method == null) return null;
         Value parameter = null;
         if(method.isConcrete()){
@@ -164,6 +165,58 @@ public class Utility {
         System.out.println(s);
     }
 
+    public static void initializeAbstractClassesInfo(){
+        for(SootClass cls : Scene.v().getClasses()){
+            if(cls.isConcrete()) { // Implemented class.
+                for (SootClass abstract_cls : cls.getInterfaces()) {
+                    Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
+                    if (implemented_classes == null) {
+                        implemented_classes = new HashSet<>();
+                        implemented_classes.add(cls);
+                        abstractClassToImplementedClasses.put(abstract_cls, implemented_classes);
+                    } else {
+                        implemented_classes.add(cls);
+                    }
+                }
+            }
+        }
+    }
+    public static Body getBodyOfAbstractMethod(InterfaceInvokeExpr ifi){
+        SootMethod abstract_method = ifi.getMethod();
+        SootClass abstract_cls = abstract_method.getDeclaringClass();
+        Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
+        if(implemented_classes == null){
+            Utility.printSymbols("!");
+            System.out.println("Special abstract class. Cannot find the implemented class of " + abstract_cls.getName());
+            Utility.printSymbols("!");
+            return null;
+        }
+        for(SootClass implemented_cls : implemented_classes){
+            for(SootMethod method : implemented_cls.getMethods()){
+                if(method.isConcrete()){
+                    if(method.getSubSignature().equals(abstract_method.getSubSignature())){
+                        System.out.println("abstract: " + abstract_method.getSubSignature());
+                        if(method.getDeclaration().contains(" volatile ")) { // The return types of the abstract method and its implemented methods are different.
+                            Body body = method.retrieveActiveBody();
+                            for (Unit unit : body.getUnits()) {
+                                InvokeExpr i = Utility.getInvokeOfUnit(unit);
+                                if (i instanceof VirtualInvokeExpr && i.getMethod().getName().equals(abstract_method.getName())) {
+                                    System.out.println("implemented: " + i.getMethod().getSubSignature());
+                                    return i.getMethod().retrieveActiveBody();
+                                }
+                            }
+                        }
+                        System.out.println("implemented: " + method.getSubSignature());
+                        return method.retrieveActiveBody();
+                    }
+                }
+            }
+        }
+        Utility.printSymbols("!");
+        System.out.println("Special abstract method. Cannot find the implemented method of " + abstract_method.getSignature());
+        Utility.printSymbols("!");
+        return null;
+    }
 
 }
 

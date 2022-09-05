@@ -13,13 +13,13 @@ public class Tainted {
 
     // For constructing the call path of the given method.
     // method => parents
-    public static Map<SootMethod, List<SootMethod>> methodToParents = new HashMap<SootMethod, List<SootMethod>>();
+    public static Map<SootMethod, Set<SootMethod>> methodToParents = new HashMap<SootMethod, Set<SootMethod>>();
     // element name => data structures.
-    public static Map<String, List<Value>> elementToDataStructures = new HashMap<String, List<Value>>();
+    public static Map<String, Set<Value>> elementToDataStructures = new HashMap<String, Set<Value>>();
     // element name => the method for parsing the element.
     public static Map<String, SootMethod> elementToMethod = new HashMap<String, SootMethod>();
     // method name => List of Pair<element name, data structure>
-    public static Map<SootMethod, List<Pair<String, Value>>> methodToElement_DataStructures = new HashMap<SootMethod, List<Pair<String, Value>>>();
+    public static Map<SootMethod, Set<Pair<String, Value>>> methodToElement_DataStructures = new HashMap<SootMethod, Set<Pair<String, Value>>>();
     // One call path of a given method.
     public static List<String> call_path = new ArrayList<>();
     // All call paths of analyzed methods.
@@ -79,7 +79,7 @@ public class Tainted {
 
         call_path.add(method.getSignature());
         if(methodToParents.containsKey(method)){
-            List<SootMethod> parents = methodToParents.get(method);
+            Set<SootMethod> parents = methodToParents.get(method);
             for(SootMethod p : parents){
                 generateCallPathsAndLogData(p, data_structure, flag);
             }
@@ -138,23 +138,23 @@ public class Tainted {
     }
 
     public static void storeElementAndCorrespondingDataStructure(String element, Value data_structure){
-        List<Value> ds = elementToDataStructures.get(element);
+        Set<Value> ds = elementToDataStructures.get(element);
         if (ds == null) { // This key does not exist.
-            ds = new ArrayList<>();
+            ds = new HashSet<>();
             ds.add(data_structure);
             elementToDataStructures.put(element, ds);
-            } else if (!ds.contains(data_structure)) { // Avoid duplicate keys.
+            } else {
             ds.add(data_structure);
         }
     }
     public static void storeMethodAndCorrespondingElement_DataStructure(SootMethod method, String element, Value data_structure){
-        List<Pair<String, Value>> e_ds = methodToElement_DataStructures.get(method);
+        Set<Pair<String, Value>> e_ds = methodToElement_DataStructures.get(method);
         Pair<String, Value> e_d = new Pair<String, Value>(element, data_structure);
         if(e_ds == null) { // This key does not exist.
-            e_ds = new ArrayList<>();
+            e_ds = new HashSet<>();
             e_ds.add(e_d);
             methodToElement_DataStructures.put(method, e_ds);
-        } else if (!e_ds.contains(e_d)){ // Avoid duplicate keys.
+        } else { // Avoid duplicate keys.
             e_ds.add(e_d);
         }
     }
@@ -340,9 +340,6 @@ public class Tainted {
             if(tainted_value!=null) {
                 System.out.println("tainted value: " + tainted_value);
             }
-            if(i!=null){
-                System.out.println("callee: " + callee.getSignature());
-            }
             Utility.printSymbols("-");
 
             // result = XXX(parser)
@@ -376,6 +373,9 @@ public class Tainted {
             if(base!=null) {
                 base_type = base.getType().toString();
                 if (base.equals(tainted_value)) {
+                    Utility.printSymbols("*");
+                    System.out.println("tainted base: " + unit);
+                    Utility.printSymbols("*");
                     if (base_type.equals("android.content.pm.parsing.result.ParseResult")) {
                         if (!callee_name.equals("getResult")) { // ! result.getResult()
                             continue;
@@ -391,6 +391,9 @@ public class Tainted {
             // If the tainted value is passed in the callee, this callee is tainted.
             Integer parameter_index = Utility.isParameter(i, tainted_value);
             if(parameter_index!=-1){
+                Utility.printSymbols("*");
+                System.out.println("tainted callee: " + unit);
+                Utility.printSymbols("*");
                 declaring_class = callee.getDeclaringClass().getName();
                 if(callee_name.equals("add") || callee_name.equals("put")){ // xxx.add(tainted_value)
                     if(base!=null) {
@@ -401,15 +404,15 @@ public class Tainted {
                 if(skip_methods.contains(callee_name) || skip_classes.contains(declaring_class)) continue;
                 if(callee_name.startsWith("is")) continue;
                 if(! no_analyzed_methods.contains(callee_name) && ! no_analyzed_classes.contains(declaring_class)){
-                    Value parameter = Utility.transfer(callee, parameter_index);
+                    Value parameter = Utility.getParameter(callee, parameter_index);
                     if(parameter!=null) {
                         tainted_methods.offer(new Pair<SootMethod, Value>(callee, parameter));
-                        List<SootMethod> parents = methodToParents.get(callee);
+                        Set<SootMethod> parents = methodToParents.get(callee);
                         if (parents == null) { // This key is not exist.
-                            parents = new ArrayList<>();
+                            parents = new HashSet<>();
                             parents.add(entry_method);
                             methodToParents.put(callee, parents);
-                        } else if (!parents.contains(callee)){ // Avoid duplicated parents.
+                        } else { // Avoid duplicated parents.
                             parents.add(entry_method);
                         }
                     } else{
@@ -436,7 +439,7 @@ public class Tainted {
                 }
             }
         }
-        if(element!="NULL"){
+        if(!element.equals("NULL")){
             Utility.printSymbols("!");
             System.out.println("Special element : " + element + " in the method " + entry_method.getSignature());
             storeElementAndCorrespondingMethod(element, entry_method);
@@ -453,18 +456,18 @@ public class Tainted {
                 }
             } else {
                 Pair<String, Value> e_d = new Pair<String, Value>(element, tainted_value);
-                List<Pair<String, Value>> e_ds = methodToElement_DataStructures.get(entry_method);
+                Set<Pair<String, Value>> e_ds = methodToElement_DataStructures.get(entry_method);
                 if (e_ds == null) {
-                    e_ds = new ArrayList<>();
+                    e_ds = new HashSet<>();
                     e_ds.add(e_d);
                     methodToElement_DataStructures.put(entry_method, e_ds);
-                } else if (!e_ds.contains(e_d)) {
+                } else {
                     e_ds.add(e_d);
                 }
             }
         }
         // log
-        List<Pair<String, Value>> e_ds = methodToElement_DataStructures.get(entry_method);
+        Set<Pair<String, Value>> e_ds = methodToElement_DataStructures.get(entry_method);
         if(e_ds!=null){
             for(Pair<String, Value> e_d : e_ds){
                 String e = e_d.getO1();

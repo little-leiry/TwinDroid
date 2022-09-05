@@ -20,9 +20,10 @@ public class framework {
     public static Map<String, List<String>> methodToParents = new HashMap<String, List<String>>();
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        //sootInitial(path);
+        sootInitial(path);
+        Utility.initializeAbstractClassesInfo();
         //Map<List<SootMethod>, String> callPathToType =new HashMap<List<SootMethod>, String>();
-        test5();
+        test3();
         //test1();
 
 
@@ -141,20 +142,26 @@ public class framework {
     // print body
     // given class name and method name
     public static void test2() {
-        //String className = "android.content.pm.parsing.component.ParsedComponentUtils";
-        //String methodName = "addMetaData";
-        String className = "android.content.pm.parsing.component.ParsedComponent";
-        String methodName = "addIntent";
+        String className = "android.content.pm.parsing.result.ParseTypeImpl";
+        String methodName = "getResult";
+        //String className = "android.content.pm.parsing.component.ParsedPermission";
+        //String className = "android.content.pm.parsing.result.ParseResult";
+        /*SootClass cls = Scene.v().getSootClassUnsafe(className);
+        System.out.println(cls.isAbstract());
+        System.out.println(cls.getInterfaces());
+        System.out.println(cls.getName());*/
+        //String methodName = "addIntent";
         List<Body> bodies = Utility.getBodyOfMethod(className, methodName);
         for (Body body : bodies) {
+            System.out.println(body);
             //CompleteBlockGraph tug = new CompleteBlockGraph(body);
             //System.out.println(tug);
-            for(Unit unit : body.getUnits()){
+           /* for(Unit unit : body.getUnits()){
                 if(unit instanceof AssignStmt){
                     AssignStmt as = (AssignStmt) unit;
                     System.out.println(as.getDefBoxes());
                 }
-            }
+            }*/
         }
     }
 
@@ -162,13 +169,14 @@ public class framework {
     // given method signature
     private static void test3() {
         //String methodSig = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTags(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.TypedArray,android.content.res.Resources,android.content.res.XmlResourceParser,int)>";
-        String methodSig = "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>";
+        String methodSig = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>";
         //SootMethod sm = Scene.v().getMethod(methodSig);
+        //System.out.println(sm.getSubSignature());
         //Integer index = 1;
         //System.out.println(Utility.transfer(sm, index));
         Body body = Utility.getBodyOfMethod(methodSig);
         for(Unit unit : body.getUnits()){
-            if(unit instanceof AssignStmt){
+            /*if(unit instanceof AssignStmt){
                 AssignStmt as = (AssignStmt) unit;
                 System.out.println("==================: " +as);
                 System.out.println(as.getUseBoxes());
@@ -183,15 +191,18 @@ public class framework {
                 IdentityStmt is = (IdentityStmt) unit;
                 System.out.println("++++++++++++++++++++: " + is);
                 System.out.println(is.getRightOp());
-            }
-            /*InvokeExpr i = Utility.getInvokeOfUnit(unit);
+            }*/
+            InvokeExpr i = Utility.getInvokeOfUnit(unit);
             if(i!=null){
                 if(i instanceof InterfaceInvokeExpr){
+                    InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) i;
                     SootMethod s = i.getMethod();
-                    System.out.println(s);
-                    System.out.println(s.getDeclaringClass());
+                    if(s.getName().equals("addPermission")){
+                        Body b = Utility.getBodyOfAbstractMethod(ifi);
+                        System.out.println(b);
+                    }
                 }
-            }*/
+            }
         }
         //System.out.println(body);
         /*Map<String, String> caseNumToElement = new HashMap<String, String>();
@@ -364,7 +375,7 @@ public class framework {
         String s1 = "intent-filter";
         String s2 = "parseIntentFilter";
         System.out.println(Utility.areRelatedNames(s1, s2));*/
-        List<String> p1 = new ArrayList<>();
+        /*List<String> p1 = new ArrayList<>();
         p1.add("b");
         p1.add("c");
         methodToParents.put("a", p1);
@@ -377,16 +388,17 @@ public class framework {
         methodToParents.put("c", p3);
         generateCallPaths("a", 1);
         System.out.println("call paths: " + call_paths);
-        System.out.println(call_path);
+        System.out.println(call_path);*/
         //System.out.println(Utility.isNumeric("000"));
        //Utility.printSymbols("-");
-        /*Pair<String, String> p1 = new Pair<>("a", "b");
+        Pair<String, String> p1 = new Pair<>("a", "b");
         Pair<String, String> p2 = new Pair<>("a", "b");
         System.out.println(p1.equals(p2));
-        List<Pair<String, String>> p = new ArrayList<>();
+        Set<Pair<String, String>> p = new HashSet<>();
         p.add(p1);
-        System.out.println(p.contains(p2));
-        System.out.println(p1==p2);*/
+        p.add(p2);
+        System.out.println(p);
+        System.out.println(p.size());
     }
 
     public static void generateCallPaths(String method_sig, int flag){
