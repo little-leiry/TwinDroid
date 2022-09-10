@@ -1,8 +1,6 @@
-import soot.jimple.toolkits.callgraph.Filter;
-
 import java.io.*;
 
-public class Store {
+public class Log {
     public static void logData(String file_path, String data){
         try {
             File file = new File(file_path);

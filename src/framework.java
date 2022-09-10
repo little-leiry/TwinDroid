@@ -1,12 +1,7 @@
-import org.jetbrains.annotations.Nullable;
 import soot.*;
 
 import soot.jimple.*;
-import soot.jimple.spark.ondemand.pautil.SootUtil;
 import soot.options.Options;
-import soot.toolkits.graph.CompleteBlockGraph;
-import soot.toolkits.graph.TrapUnitGraph;
-import soot.toolkits.scalar.Pair;
 
 import java.io.IOException;
 import java.util.*;
@@ -21,7 +16,7 @@ public class framework {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         sootInitial(path);
-        Utility.initializeAbstractClassesInfo();
+        //Utility.initializeAbstractClassesInfo();
         //Map<List<SootMethod>, String> callPathToType =new HashMap<List<SootMethod>, String>();
         test3();
         //test1();
@@ -60,7 +55,7 @@ public class framework {
         Scene.v().loadNecessaryClasses();
     }
 
-    // analyse test.java
+    // analyse test.javad
     private static void test() {
         sootInitial_test(path_test);
         //SootClass cls =Scene.v().getSootClassUnsafe("test");
@@ -72,7 +67,7 @@ public class framework {
             }*//*
             System.out.println(sm.getDeclaringClass());
         }*/
-        List<Body> bodies = Utility.getBodyOfMethod("test", "testSample");
+        List<Body> bodies = Utils.getBodyOfMethod("test", "testSample");
         for (Body body : bodies) {
             System.out.println(body);
             //CompleteBlockGraph tug = new CompleteBlockGraph(body);
@@ -90,9 +85,9 @@ public class framework {
                     }*//*
                 }*/
 
-                if(unit instanceof LookupSwitchStmt){
-                    LookupSwitchStmt lss = (LookupSwitchStmt) unit;
-                    System.out.println(lss.getLookupValue(0));
+                if(unit instanceof TableSwitchStmt){
+                    TableSwitchStmt lss = (TableSwitchStmt) unit;
+                    System.out.println(lss);
                 }
                 /*if (unit instanceof IfStmt){
                     IfStmt is = (IfStmt) unit;
@@ -110,7 +105,7 @@ public class framework {
 
 
     // find the methods related to the entry point
-    private static void test1() {
+    /*private static void test1() {
         String[] skip_mds = {"obtainAttributes", "skipCurrentTag", "append"};
         String[] no_analysis_mds = {"max", "min", "create"};
         String[] skip_cls = {"android.content.res.XmlResourceParser", "android.content.pm.parsing.result.ParseInput"};
@@ -137,21 +132,19 @@ public class framework {
             System.out.println("value: " + tainted_value);
             //Tainted.findTaintedMethods(tainted_method, tainted_value, skip_methods);
         }
-    }
+    }*/
 
     // print body
     // given class name and method name
     public static void test2() {
-        String className = "android.content.pm.parsing.result.ParseTypeImpl";
-        String methodName = "getResult";
+        String className = "android.content.res.XmlBlock$Parser";
+        String methodName = "getName";
         //String className = "android.content.pm.parsing.component.ParsedPermission";
         //String className = "android.content.pm.parsing.result.ParseResult";
-        /*SootClass cls = Scene.v().getSootClassUnsafe(className);
-        System.out.println(cls.isAbstract());
-        System.out.println(cls.getInterfaces());
-        System.out.println(cls.getName());*/
+        SootClass cls = Scene.v().getSootClassUnsafe(className);
+        System.out.println(cls.getMethods());
         //String methodName = "addIntent";
-        List<Body> bodies = Utility.getBodyOfMethod(className, methodName);
+        List<Body> bodies = Utils.getBodyOfMethod(className, methodName);
         for (Body body : bodies) {
             System.out.println(body);
             //CompleteBlockGraph tug = new CompleteBlockGraph(body);
@@ -168,15 +161,33 @@ public class framework {
     // print body
     // given method signature
     private static void test3() {
-        //String methodSig = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTags(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.TypedArray,android.content.res.Resources,android.content.res.XmlResourceParser,int)>";
-        String methodSig = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>";
-        //SootMethod sm = Scene.v().getMethod(methodSig);
+        String methodSig = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseAppChildTag(android.content.pm.parsing.result.ParseInput,java.lang.String,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>";
+        String methodSig2 = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTag(java.lang.String,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>";
+        String methodSig3 = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>";
+        //String methodSig = "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>";
+        SootMethod sm = Scene.v().getMethod(methodSig);
+        SootMethod sm2 = Scene.v().getMethod(methodSig2);
+        SootMethod sm3 = Scene.v().getMethod(methodSig3);
+        List<SootMethod> parents = new ArrayList<>();
+        parents.add(sm2);
+        Tainted t = new Tainted(sm, null, "test1", parents);
+        List<SootMethod> p = Utils.deepCopy(t.getParents());
+        p.add(sm3);
+        Tainted t2 = new Tainted(sm2, null, "test2", p);
+        System.out.println(t.getParents());
+        System.out.println(t2.getParents());
         //System.out.println(sm.getSubSignature());
         //Integer index = 1;
         //System.out.println(Utility.transfer(sm, index));
-        Body body = Utility.getBodyOfMethod(methodSig);
-        for(Unit unit : body.getUnits()){
-            /*if(unit instanceof AssignStmt){
+        //Body body = Utility.getBodyOfMethod(methodSig);
+        //List<Unit> b = Utility.bodyToList(body);
+        /*for(Unit u : b){
+            System.out.println(u);
+        }*/
+       /* CompleteBlockGraph tug = new CompleteBlockGraph(body);
+        System.out.println(tug);*/
+        /*for(Unit unit : body.getUnits()){
+            if(unit instanceof AssignStmt){
                 AssignStmt as = (AssignStmt) unit;
                 System.out.println("==================: " +as);
                 System.out.println(as.getUseBoxes());
@@ -191,57 +202,84 @@ public class framework {
                 IdentityStmt is = (IdentityStmt) unit;
                 System.out.println("++++++++++++++++++++: " + is);
                 System.out.println(is.getRightOp());
-            }*/
+            }
             InvokeExpr i = Utility.getInvokeOfUnit(unit);
             if(i!=null){
                 if(i instanceof InterfaceInvokeExpr){
                     InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) i;
-                    SootMethod s = i.getMethod();
+                    SootMethod s = ifi.getMethod();
+                    //System.out.println(ifi);
+                    SootClass cls =((RefType) ifi.getBase().getType()).getSootClass();
+                    //System.out.println("----: " + cls);
+                    //System.out.println(s);
                     if(s.getName().equals("addPermission")){
-                        Body b = Utility.getBodyOfAbstractMethod(ifi);
+                        Utility.printSymbols("-");
+                        Body b = Utility.getImplementedMethodOfAbstractMethod(ifi).retrieveActiveBody();
                         System.out.println(b);
+                        Utility.printSymbols("-");
                     }
                 }
             }
-        }
+        }*/
         //System.out.println(body);
-        /*Map<String, String> caseNumToElement = new HashMap<String, String>();
+        /*Map<String, String> caseIdToElement = new HashMap<String, String>();
+        Map<String, Unit> elementToUnit = new HashMap<String, Unit>();
         Map<String, SootMethod> elementToMethod = new HashMap<String, SootMethod>();
         Map<Value, String> likely_elements = new HashMap<Value, String>();
         int flag = 0;
         int count = 0;
-        int case_nums = 0;
+        int case_num = 0;
         String element = "NULL";
         Value case_value = null;
-        for(Unit unit : body.getUnits()){
+        for(Unit unit : b){
+            int flag_element_cases = 0;
             // switch(element): case(XXX)=>parseXXX(parser)
             // LookupSwitchStmt($i1){case -12356 goto z0 = equals(XXX), b2 = 0}
             // LookupSwitchStmt(b2){case 0 goto $r6 = parseXXX(parser)}
             if(unit instanceof LookupSwitchStmt){
                 LookupSwitchStmt lss = (LookupSwitchStmt) unit;
-                System.out.println(lss.getUseBoxes());
-                for(int num =0; num< lss.getTargetCount();num++){
+                if (case_value != null && lss.getUseBoxes().get(0).getValue().equals(case_value)) { // This LookupSwitchStmt is corresponding to the element's LookupSwitchStmt.
+                    flag_element_cases = 1;
+                }
+                //System.out.println(lss.getUseBoxes());
+                //System.out.println(lss.getTargets());
+                for (int num = 0; num < lss.getTargetCount(); num++) {
                     Unit u = lss.getTarget(num);
-                    if(u instanceof AssignStmt) {
-                        AssignStmt as = (AssignStmt) u;
-                        InvokeExpr i = Utility.getInvokeOfAssignStmt(as);
-                        if (i != null) {
-                            SootMethod s = i.getMethod();
-                            if (s.getName().equals("equals")) { // This LookupSwitchStmt is related to elements.
-                                case_nums = lss.getTargetCount(); // The number of elements.
-                                System.out.println(as);
-                                break;
-                            }
-                            if (case_value !=null) {
-                                if (lss.getUseBoxes().get(0).getValue().equals(case_value)) { // This LookupSwitchStmt is corresponding to the element's LookupSwitchStmt.
-                                    String case_id = ((Integer) lss.getLookupValue(num)).toString();
-                                    if (caseNumToElement.containsKey(case_id)) {
-                                        String e = caseNumToElement.get(case_id);
-                                        Tainted.storeElementAndCorrespondingMethod(e, s);
-                                        //System.out.println(e + " => " + s.getName());
-                                        //elementToMethod.put(e, s);
+                    InvokeExpr invoke = Utility.getInvokeOfUnit(u);
+                    if (invoke != null) {
+                        if (invoke.getMethod().getName().equals("equals")) { // This LookupSwitchStmt is related to elements.
+                            case_num = lss.getTargetCount(); // The number of elements.
+                            break;
+                        }
+                    }
+                    if (flag_element_cases == 1) {
+                        String case_id = ((Integer) lss.getLookupValue(num)).toString();
+                        if (caseIdToElement.containsKey(case_id)) {
+                            String e = caseIdToElement.get(case_id);
+                            if (invoke != null) {
+                                Utility.printSymbols("-");
+                                elementToMethod.put(e, invoke.getMethod());
+                                elementToUnit.put(e, u);
+                                System.out.println(u);
+                                System.out.println("index: " + b.indexOf(u));
+                                System.out.println(e + " => " + invoke.getMethod().getName());
+                            } else {
+                                Utility.printSymbols("!");
+                                System.out.println("Special element cases. The target unit does not contain an InvokeExpr:");
+                                System.out.println(e + " => " + u);
+                                int index  = b.indexOf(u);
+                                System.out.println("Find the appropriate target unit ...");
+                                while(true){
+                                    Unit uu = b.get(index+1);
+                                    InvokeExpr ii = Utility.getInvokeOfUnit(uu);
+                                    if(ii != null){
+                                        elementToUnit.put(e, uu);
+                                        System.out.println(e + " => " + ii.getMethod().getName());
+                                        break;
                                     }
+                                    index+=1;
                                 }
+                                Utility.printSymbols("!");
                             }
                         }
                     }
@@ -260,13 +298,13 @@ public class framework {
                 }
                 if(i!=null){
                     if(i.getMethod().getName().equals("equals")){
-                        System.out.println(as);
+                        //System.out.println(as);
                         if(i.getArg(0) instanceof StringConstant) {
                             element = i.getArg(0).toString();
-                            System.out.println("=====" + as);
+                            //System.out.println("=====" + as);
                         } else {
                             Value base = Utility.getBaseOfInvokeExpr(i);
-                            System.out.println(base);
+                            //System.out.println(base);
                             if (base != null){
                                 if(likely_elements.containsKey(base)){
                                     element=likely_elements.get(base);
@@ -279,12 +317,20 @@ public class framework {
                         }
                         flag = 1;
                     }
+                    if(elementToMethod.containsValue(i.getMethod())){
+                        Utility.printSymbols("%");
+                        System.out.println(i.getMethod());
+                        for (Map.Entry<String, SootMethod> entry : elementToMethod.entrySet()) {
+                            if (i.getMethod().equals(entry.getValue())) {
+                                System.out.println(entry.getKey());
+                            }
+                        }
+                    }
                 }
-
                 //System.out.println(flag);
             }
 
-            if(flag == 1 && case_nums !=0){
+            if(flag == 1 && case_num !=0){
                 count += 1;
                 //System.out.println(count);
                 if(count == 3){
@@ -296,20 +342,31 @@ public class framework {
                             case_value = as.getLeftOp();
                         }
                         System.out.println(case_id + " => " + element);
-                        caseNumToElement.put(case_id, element);
+                        caseIdToElement.put(case_id, element);
                     } else {
                         System.out.println("Special case: " + unit);
-                        List<String> case_ids = Utility.intToList(case_nums);
+                        List<String> case_ids = Utility.intToList(case_num);
                         for(String case_id : case_ids){
-                            if(!caseNumToElement.containsKey(case_id)){
+                            if(!caseIdToElement.containsKey(case_id)){
                                 System.out.println(case_id + " => " + element);
-                                caseNumToElement.put(case_id, element);
+                                caseIdToElement.put(case_id, element);
                             }
                         }
                     }
                     element = "NULL";
                     flag=0;
                     count=0;
+                }
+            }
+
+            if(elementToUnit.containsValue(unit)){
+                Utility.printSymbols("+");
+                System.out.println(unit);
+                System.out.println(b.indexOf(unit));
+                for (Map.Entry<String, Unit> entry : elementToUnit.entrySet()) {
+                    if (unit.equals(entry.getValue())) {
+                        System.out.println(entry.getKey());
+                    }
                 }
             }
         }
@@ -369,10 +426,10 @@ public class framework {
         /*String a = null;
         System.out.println(a.equals("b"));*/
         //System.out.println("parseintentfilter".contains("intentfilter"));
-        /*InterfaceInvokeExpr iii;
-        SootClass cls =((RefType) iii.getBase().getType()).getSootClass();
-        cls.getInterfaces();
-        String s1 = "intent-filter";
+       // InterfaceInvokeExpr iii;
+        //SootClass cls =((RefType) iii.getBase().getType()).getSootClass();
+        //cls.getInterfaces();
+        /*String s1 = "intent-filter";
         String s2 = "parseIntentFilter";
         System.out.println(Utility.areRelatedNames(s1, s2));*/
         /*List<String> p1 = new ArrayList<>();
@@ -386,33 +443,42 @@ public class framework {
         List<String> p3 = new ArrayList<>();
         p3.add("f");
         methodToParents.put("c", p3);
-        generateCallPaths("a", 1);
+        generateCallPaths("a", 0, 0);
         System.out.println("call paths: " + call_paths);
         System.out.println(call_path);*/
         //System.out.println(Utility.isNumeric("000"));
        //Utility.printSymbols("-");
-        Pair<String, String> p1 = new Pair<>("a", "b");
+        /*Pair<String, String> p1 = new Pair<>("a", "b");
         Pair<String, String> p2 = new Pair<>("a", "b");
         System.out.println(p1.equals(p2));
         Set<Pair<String, String>> p = new HashSet<>();
         p.add(p1);
         p.add(p2);
         System.out.println(p);
-        System.out.println(p.size());
+        System.out.println(p.size());*/
+        /*InvokeExpr i =null;
+        System.out.println(i instanceof VirtualInvokeExpr);*/
+        List<String> a = null;
+        for(String b : a){
+            System.out.println("q");
+        }
     }
 
-    public static void generateCallPaths(String method_sig, int flag){
+    public static void generateCallPaths(String method_sig, int flag, int depth){
         System.out.println("-----------------------------");
-        if(flag == 0){
-            System.out.println("This is 0.");
+        System.out.println("depth: " + depth);
+        System.out.println("flag: " + flag);
+        if(flag == 0 && depth == 1){
+            System.out.println("Ok");
             flag =1;
         }
         call_path.add(method_sig);
         if(methodToParents.containsKey(method_sig)){
             List<String> parents = methodToParents.get(method_sig);
+            depth += 1;
             for(String p : parents){
                 System.out.println("method: " + method_sig + " => " + " parent: " + p);
-                generateCallPaths(p, 1);
+                generateCallPaths(p, flag, depth);
             }
             call_path.remove(method_sig);
         }else{
