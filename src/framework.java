@@ -2,7 +2,12 @@ import soot.*;
 
 import soot.jimple.*;
 import soot.options.Options;
+import soot.toolkits.graph.CompleteBlockGraph;
+import soot.toolkits.scalar.Pair;
 
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 import java.io.IOException;
 import java.util.*;
 
@@ -16,12 +21,8 @@ public class framework {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         sootInitial(path);
-        //Utility.initializeAbstractClassesInfo();
-        //Map<List<SootMethod>, String> callPathToType =new HashMap<List<SootMethod>, String>();
+        Utils.initializeAbstractClassesInfo();
         test3();
-        //test1();
-
-
     }
 
     private static void sootInitial(String apkPath) {
@@ -105,34 +106,64 @@ public class framework {
 
 
     // find the methods related to the entry point
-    /*private static void test1() {
+    private static void test1() {
         String[] skip_mds = {"obtainAttributes", "skipCurrentTag", "append"};
         String[] no_analysis_mds = {"max", "min", "create"};
         String[] skip_cls = {"android.content.res.XmlResourceParser", "android.content.pm.parsing.result.ParseInput"};
-        String[] no_analysis_cls = {"CollectionUtils", "TextUtils"};
-        List<String> skip_methods = Utility.stringsToList(skip_mds);
-        List<String> no_analysis_methods = Utility.stringsToList(no_analysis_mds);
-        List<String> skip_classes = Utility.stringsToList(skip_cls);
-        List<String> no_analysis_classes = Utility.stringsToList(no_analysis_cls);
+        String[] no_analysis_cls = {"com.android.internal.util.CollectionUtils", "android.text.TextUtils"};
+        List<String> skip_methods = Utils.stringsToList(skip_mds);
+        List<String> no_analysis_methods = Utils.stringsToList(no_analysis_mds);
+        List<String> skip_classes = Utils.stringsToList(skip_cls);
+        List<String> no_analysis_classes = Utils.stringsToList(no_analysis_cls);
 
-        List<SootMethod> analysed_methods = new ArrayList<>();
+        List<Tainted> analyzed_tainted_points = new ArrayList<>();
         Tainted.findEntryPoints();
 
-        while (!Tainted.tainted_methods.isEmpty()) {
-            Pair<SootMethod, Value> first = Tainted.tainted_methods.poll();
-            SootMethod tainted_method = first.getO1();
-            System.out.println("=========================================================");
-            System.out.println("method: " + tainted_method);
-            if (analysed_methods.contains(tainted_method)){
-                System.out.println("This method is analysed.");
-                continue;
+        while (!Tainted.tainted_points.isEmpty()) {
+            Tainted tainted_point = Tainted.tainted_points.poll();
+            SootMethod tainted_method = tainted_point.getMethod();
+            String tainted_element = tainted_point.getElement();
+            List<SootMethod> tainted_parents = tainted_point.getParents();
+            if(tainted_parents==null){
+                tainted_parents = new ArrayList<>();
             }
-            analysed_methods.add(tainted_method);
-            Value tainted_value = first.getO2();
-            System.out.println("value: " + tainted_value);
-            //Tainted.findTaintedMethods(tainted_method, tainted_value, skip_methods);
+            Utils.printPartingLine("#");
+            System.out.println("Current analyzed method: " + tainted_method);
+            System.out.println("Entry value: " + tainted_point.getValue());
+            int flag_analyzed = 0;
+            for(Tainted atp : analyzed_tainted_points){
+                if(atp.getMethod().equals(tainted_method)) {
+                    flag_analyzed = 1;
+                    System.out.println("This method has been analysed.");
+                    Set<Pair<String, Value>> e_ds = Tainted.taintedPointToElementAndDataStructures.get(atp);
+                    Tainted.taintedPointToElementAndDataStructures.put(tainted_point, e_ds);
+                    for(Pair<String, Value> e_d : e_ds){
+                        String e = e_d.getO1();
+                        Value d = e_d.getO2();
+                        String associated_element = Tainted.getAssociatedElement(tainted_element, e); // This element is related to the tainted method and its parents.
+                        Tainted.storeAssociatedElementAndCorrespondingDataStructure(tainted_method, tainted_parents, associated_element, d);
+                    }
+                    List<SootMethod> parents = Utils.deepCopy(tainted_point.getParents());
+                    parents.add(tainted_method);
+                    for(Tainted child : Tainted.methodToTaintedChildren.get(tainted_method)){
+                        String element = child.getElement();
+                        String associated_element = Tainted.getAssociatedElement(tainted_element, element);
+                        Tainted.tainted_points.offer(new Tainted(child.getMethod(), child.getValue(), associated_element, parents));
+                    }
+                    break;
+                }
+            }
+            if(flag_analyzed==1) continue;
+            analyzed_tainted_points.add(tainted_point);
+            Tainted.dataFlowAnalysisForMethod(tainted_point, skip_methods, no_analysis_methods, skip_classes, no_analysis_classes);
+
+            Utils.pause();
         }
-    }*/
+
+        for(Map.Entry<String, Set<Value>> entry: Tainted.associatedElementToDataStructures.entrySet()){
+            System.out.println(entry.getKey() + " => " + entry.getValue().toString());
+        }
+    }
 
     // print body
     // given class name and method name
@@ -161,31 +192,61 @@ public class framework {
     // print body
     // given method signature
     private static void test3() {
-        String methodSig = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseAppChildTag(android.content.pm.parsing.result.ParseInput,java.lang.String,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>";
-        String methodSig2 = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTag(java.lang.String,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>";
-        String methodSig3 = "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>";
-        //String methodSig = "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>";
-        SootMethod sm = Scene.v().getMethod(methodSig);
-        SootMethod sm2 = Scene.v().getMethod(methodSig2);
-        SootMethod sm3 = Scene.v().getMethod(methodSig3);
-        List<SootMethod> parents = new ArrayList<>();
+        String[] sigs = {
+                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl setSigningDetails(android.content.pm.PackageParser$SigningDetails)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApk(android.content.pm.parsing.result.ParseInput,java.io.File,java.lang.String,android.content.pm.split.SplitAssetLoader,int)>",
+                "<android.content.pm.parsing.component.ParsedServiceUtils: android.content.pm.parsing.result.ParseResult parseService(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,boolean,android.content.pm.parsing.result.ParseInput)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApplication(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTags(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.TypedArray,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
+                "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
+        };
+        String methodSig = sigs[0];
+        Body body = Utils.getBodyOfMethod(methodSig);
+        System.out.println(body);
+        /*CompleteBlockGraph tug = new CompleteBlockGraph(body);
+        System.out.println(tug);*/
+        List<Value> vs = new ArrayList<>();
+        for(Unit unit:body.getUnits()){
+            if(unit instanceof IdentityUnit){
+                IdentityUnit iu = (IdentityUnit) unit;
+                vs.add(iu.getLeftOp());
+            }
+            if(unit instanceof AssignStmt) {
+                AssignStmt as = (AssignStmt) unit;
+                for (Value v : vs) {
+                    System.out.println(v);
+                    System.out.println(Utils.isRightValueOfAssignment(as, v));
+                }
+            }
+        }
+        //System.out.println(body);
+       // String methodSig = ;
+        //String methodSig3 = ;
+        //String methodSig = "";
+        //SootMethod sm = Scene.v().getMethod(methodSig);
+        //SootMethod sm2 = Scene.v().getMethod(methodSig2);
+        //SootMethod sm3 = Scene.v().getMethod(methodSig3);
+        /*List<SootMethod> parents = new ArrayList<>();
         parents.add(sm2);
         Tainted t = new Tainted(sm, null, "test1", parents);
         List<SootMethod> p = Utils.deepCopy(t.getParents());
         p.add(sm3);
         Tainted t2 = new Tainted(sm2, null, "test2", p);
         System.out.println(t.getParents());
-        System.out.println(t2.getParents());
+        System.out.println(t2.getParents());*/
+       /* Tainted t = new Tainted(sm, null, null, null);
+        System.out.println(t.getParents());
+        System.out.println(t.getElement());
+        System.out.println(t.getStartUnit());*/
         //System.out.println(sm.getSubSignature());
         //Integer index = 1;
         //System.out.println(Utility.transfer(sm, index));
-        //Body body = Utility.getBodyOfMethod(methodSig);
+
         //List<Unit> b = Utility.bodyToList(body);
         /*for(Unit u : b){
             System.out.println(u);
         }*/
-       /* CompleteBlockGraph tug = new CompleteBlockGraph(body);
-        System.out.println(tug);*/
         /*for(Unit unit : body.getUnits()){
             if(unit instanceof AssignStmt){
                 AssignStmt as = (AssignStmt) unit;
@@ -226,17 +287,24 @@ public class framework {
         Map<String, Unit> elementToUnit = new HashMap<String, Unit>();
         Map<String, SootMethod> elementToMethod = new HashMap<String, SootMethod>();
         Map<Value, String> likely_elements = new HashMap<Value, String>();
+        Map<Value, String> numericValueToConcreteValue = new HashMap<Value, String>();
         int flag = 0;
         int count = 0;
         int case_num = 0;
         String element = "NULL";
         Value case_value = null;
-        for(Unit unit : b){
+        List<Unit> units = Utils.bodyToList(body);
+        for(Unit unit : body.getUnits()) {
+            if (unit instanceof AssignStmt) {
+                AssignStmt as = (AssignStmt) unit;
+                numericValueToConcreteValue = constructNumericValueToConcreteValue(as, numericValueToConcreteValue);
+                likely_elements = createOrUpdateValueToLikelyElement(as, likely_elements);
+            }
             int flag_element_cases = 0;
             // switch(element): case(XXX)=>parseXXX(parser)
             // LookupSwitchStmt($i1){case -12356 goto z0 = equals(XXX), b2 = 0}
             // LookupSwitchStmt(b2){case 0 goto $r6 = parseXXX(parser)}
-            if(unit instanceof LookupSwitchStmt){
+            if (unit instanceof LookupSwitchStmt) {
                 LookupSwitchStmt lss = (LookupSwitchStmt) unit;
                 if (case_value != null && lss.getUseBoxes().get(0).getValue().equals(case_value)) { // This LookupSwitchStmt is corresponding to the element's LookupSwitchStmt.
                     flag_element_cases = 1;
@@ -245,7 +313,7 @@ public class framework {
                 //System.out.println(lss.getTargets());
                 for (int num = 0; num < lss.getTargetCount(); num++) {
                     Unit u = lss.getTarget(num);
-                    InvokeExpr invoke = Utility.getInvokeOfUnit(u);
+                    InvokeExpr invoke = Utils.getInvokeOfUnit(u);
                     if (invoke != null) {
                         if (invoke.getMethod().getName().equals("equals")) { // This LookupSwitchStmt is related to elements.
                             case_num = lss.getTargetCount(); // The number of elements.
@@ -257,72 +325,45 @@ public class framework {
                         if (caseIdToElement.containsKey(case_id)) {
                             String e = caseIdToElement.get(case_id);
                             if (invoke != null) {
-                                Utility.printSymbols("-");
+                                Utils.generatePartingLine("-");
                                 elementToMethod.put(e, invoke.getMethod());
                                 elementToUnit.put(e, u);
                                 System.out.println(u);
-                                System.out.println("index: " + b.indexOf(u));
                                 System.out.println(e + " => " + invoke.getMethod().getName());
                             } else {
-                                Utility.printSymbols("!");
+                                Utils.generatePartingLine("!");
                                 System.out.println("Special element cases. The target unit does not contain an InvokeExpr:");
                                 System.out.println(e + " => " + u);
-                                int index  = b.indexOf(u);
-                                System.out.println("Find the appropriate target unit ...");
-                                while(true){
-                                    Unit uu = b.get(index+1);
-                                    InvokeExpr ii = Utility.getInvokeOfUnit(uu);
-                                    if(ii != null){
-                                        elementToUnit.put(e, uu);
-                                        System.out.println(e + " => " + ii.getMethod().getName());
-                                        break;
-                                    }
-                                    index+=1;
-                                }
-                                Utility.printSymbols("!");
+                                System.out.println(units.indexOf(u));
+                                Utils.generatePartingLine("!");
                             }
                         }
                     }
                 }
             }
 
-            if(unit instanceof AssignStmt){
+            if (unit instanceof AssignStmt) {
                 AssignStmt as = (AssignStmt) unit;
-                InvokeExpr i = Utility.getInvokeOfAssignStmt(as);
-                if(as.getUseBoxes().get(0).getValue() instanceof StringConstant){
-                    System.out.println(as);
-                    Value element_value = as.getLeftOp();
-                    element = as.getUseBoxes().get(0).getValue().toString();
-                    likely_elements.put(element_value, element);
-                    System.out.println(element_value + " => " + element);
-                }
-                if(i!=null){
-                    if(i.getMethod().getName().equals("equals")){
-                        //System.out.println(as);
-                        if(i.getArg(0) instanceof StringConstant) {
+                InvokeExpr i = Utils.getInvokeOfAssignStmt(as);
+                if (i != null) {
+                    if (i.getMethod().getName().equals("equals")) {
+                        System.out.println(as);
+                        if (i.getArg(0) instanceof StringConstant) {
                             element = i.getArg(0).toString();
                             //System.out.println("=====" + as);
+                            flag = 1;
                         } else {
-                            Value base = Utility.getBaseOfInvokeExpr(i);
+                            Value base = Utils.getBaseOfInvokeExpr(i);
                             //System.out.println(base);
-                            if (base != null){
-                                if(likely_elements.containsKey(base)){
-                                    element=likely_elements.get(base);
+                            if (base != null) {
+                                if (likely_elements.containsKey(base)) {
+                                    element = likely_elements.get(base);
                                     System.out.println(element);
                                     System.out.println("++++++" + as);
+                                    flag = 1;
                                 } else {
-                                    System.out.println("false");
+                                    System.out.println("Non-element-related equals: " + as);
                                 }
-                            }
-                        }
-                        flag = 1;
-                    }
-                    if(elementToMethod.containsValue(i.getMethod())){
-                        Utility.printSymbols("%");
-                        System.out.println(i.getMethod());
-                        for (Map.Entry<String, SootMethod> entry : elementToMethod.entrySet()) {
-                            if (i.getMethod().equals(entry.getValue())) {
-                                System.out.println(entry.getKey());
                             }
                         }
                     }
@@ -330,43 +371,38 @@ public class framework {
                 //System.out.println(flag);
             }
 
-            if(flag == 1 && case_num !=0){
+            if (flag == 1 && case_num != 0) {
                 count += 1;
                 //System.out.println(count);
-                if(count == 3){
+                if (count == 3) {
                     // Get the mapping relationship of two related LookupSwitchStmts
-                    if (unit instanceof AssignStmt){
+                    if (unit instanceof AssignStmt) {
                         AssignStmt as = (AssignStmt) unit;
-                        String case_id = as.getUseBoxes().get(0).getValue().toString();
-                        if(case_value==null) {
-                            case_value = as.getLeftOp();
+                        System.out.println(as.getLeftOp().getType());
+                        if ("byte_int".contains(as.getLeftOp().getType().toString())) {
+                            if (case_value == null) {
+                                case_value = as.getLeftOp();
+                            }
+                        } else {
+                            System.out.println("Special case: the third unit is not the case id transform.");
+                            System.out.println(as);
                         }
+                        String case_id = numericValueToConcreteValue.get(as.getLeftOp());
                         System.out.println(case_id + " => " + element);
                         caseIdToElement.put(case_id, element);
                     } else {
                         System.out.println("Special case: " + unit);
-                        List<String> case_ids = Utility.intToList(case_num);
-                        for(String case_id : case_ids){
-                            if(!caseIdToElement.containsKey(case_id)){
+                        List<String> case_ids = Utils.intToList(case_num);
+                        for (String case_id : case_ids) {
+                            if (!caseIdToElement.containsKey(case_id)) {
                                 System.out.println(case_id + " => " + element);
                                 caseIdToElement.put(case_id, element);
                             }
                         }
                     }
                     element = "NULL";
-                    flag=0;
-                    count=0;
-                }
-            }
-
-            if(elementToUnit.containsValue(unit)){
-                Utility.printSymbols("+");
-                System.out.println(unit);
-                System.out.println(b.indexOf(unit));
-                for (Map.Entry<String, Unit> entry : elementToUnit.entrySet()) {
-                    if (unit.equals(entry.getValue())) {
-                        System.out.println(entry.getKey());
-                    }
+                    flag = 0;
+                    count = 0;
                 }
             }
         }
@@ -426,7 +462,7 @@ public class framework {
         /*String a = null;
         System.out.println(a.equals("b"));*/
         //System.out.println("parseintentfilter".contains("intentfilter"));
-       // InterfaceInvokeExpr iii;
+        // InterfaceInvokeExpr iii;
         //SootClass cls =((RefType) iii.getBase().getType()).getSootClass();
         //cls.getInterfaces();
         /*String s1 = "intent-filter";
@@ -447,7 +483,7 @@ public class framework {
         System.out.println("call paths: " + call_paths);
         System.out.println(call_path);*/
         //System.out.println(Utility.isNumeric("000"));
-       //Utility.printSymbols("-");
+        //Utility.printSymbols("-");
         /*Pair<String, String> p1 = new Pair<>("a", "b");
         Pair<String, String> p2 = new Pair<>("a", "b");
         System.out.println(p1.equals(p2));
@@ -458,10 +494,33 @@ public class framework {
         System.out.println(p.size());*/
         /*InvokeExpr i =null;
         System.out.println(i instanceof VirtualInvokeExpr);*/
-        List<String> a = null;
+        /*List<String> a = null;
         for(String b : a){
             System.out.println("q");
-        }
+        }*/
+        /*String a = "1";
+        String b = "2";
+        String s = "a + b";
+        String s1 = "0 + 1";
+        System.out.println(Utils.isExpress(s1));
+        ScriptEngineManager sem = new ScriptEngineManager();
+        ScriptEngine se = sem.getEngineByName("js");
+        se.put("a", a);
+        se.put("b", b);
+        Object result = null;
+        try{
+            result = se.eval(s1);
+            System.out.println(result.getClass().getName());
+        } catch (ScriptException e) {
+            throw new RuntimeException(e);
+        }*/
+        /*List<String> strings = new ArrayList<>();
+        strings.add("123");
+        strings.add("12");
+        strings.add("1234");
+        System.out.println(strings);
+        Collections.sort(strings, new StringComparator());
+        System.out.println(strings);*/
     }
 
     public static void generateCallPaths(String method_sig, int flag, int depth){
@@ -492,6 +551,93 @@ public class framework {
             System.out.println(call_paths);
             call_path.remove(method_sig);
         }
+    }
+
+    public static Map<Value, String> createOrUpdateValueToLikelyElement(AssignStmt as, Map<Value, String> valueToLikelyElement){
+        List<ValueBox> vbs = as.getUseBoxes();
+        if (vbs.size()==1 && vbs.get(0).getValue() instanceof StringConstant) {
+            Value element_value = as.getLeftOp();
+            String likely_element = as.getUseBoxes().get(0).getValue().toString();
+            if(likely_element.startsWith("\"/")) return valueToLikelyElement;
+            valueToLikelyElement.put(element_value, likely_element);
+            Utils.printPartingLine("+");
+            System.out.println("Likely element: " + as);
+            Utils.printPartingLine("+");
+        }
+        return valueToLikelyElement;
+    }
+
+    public static Map<Value, String> constructNumericValueToConcreteValue(AssignStmt as, Map<Value, String> byteValueToConcreteValue){
+        Value def_value = as.getLeftOp();
+        String def_value_type = def_value.getType().toString();
+        if("byte_int_boolean".contains(def_value_type)){
+            System.out.println(as);
+            //System.out.println("====: " + as.getDefBoxes());
+            //System.out.println("====: " + def_value);
+            //System.out.println("++++: " + as.getUseBoxes());
+            //System.out.println("&&&&: " + as.getRightOp());
+           // Value vv = as.getUseBoxes().get(0).getValue();
+            //System.out.println("****: " + Utils.isRightValueOfAssignment(as, vv));
+            /*if(as.getUseBoxes().size() == 1){
+                Value use_value = as.getRightOp();
+                if(use_value instanceof IntConstant){
+                    System.out.println("int: " + as);
+                    byteValueToConcreteValue.put(def_value, use_value.toString());
+                    System.out.println(def_value + " => " + use_value.toString());
+                } else {
+                    String assignment = byteValueToConcreteValue.get(use_value);
+                    if(assignment!=null) {
+                        byteValueToConcreteValue.put(def_value, assignment);
+                        System.out.println("++++: " + def_value + " => " + assignment);
+                    } else {
+                        System.out.println("wrong.");
+                    }
+                }
+            } else if (as.getUseBoxes().size() == 2){
+                System.out.println("---: " + as.getUseBoxes());
+                if(as.getUseBoxes().get(0).getValue().toString().startsWith("(")){
+                    String assign = byteValueToConcreteValue.get(as.getUseBoxes().get(1).getValue());
+                    byteValueToConcreteValue.put(def_value, assign);
+                } else {
+                    System.out.println("Special assignment (not the type transformation): " + as);
+                }
+            }else{
+                System.out.println("Special assignment of a byte value: " + as);
+                List<ValueBox> vbs = as.getUseBoxes();
+                Collections.sort(vbs, new VBComparator());
+                String s = vbs.get(0).getValue().toString();
+                int flag_compute = 1;
+                if(Utils.isExpress(s)){
+                    for(int j = 1; j<vbs.size(); j++){
+                        Value v = vbs.get(j).getValue();
+                        String assign = byteValueToConcreteValue.get(v);
+                        if(assign == null){
+                            flag_compute = 0;
+                            byteValueToConcreteValue.put(def_value, null);
+                            break;
+                        }
+                        s = s.replace(v.toString(), assign);
+                    }
+                    System.out.println(s);
+                    if(flag_compute == 1) {
+                        ScriptEngineManager sem = new ScriptEngineManager();
+                        ScriptEngine se = sem.getEngineByName("js");
+                        Object result = null;
+                        try {
+                            result = se.eval(s);
+                            System.out.println("result: " + result);
+                        } catch (ScriptException e) {
+                            throw new RuntimeException(e);
+                        }
+                        byteValueToConcreteValue.put(def_value, result.toString());
+                        System.out.println("++++: " + def_value + " => " + result.toString());
+                    }
+                } else {
+                    System.out.println("!!! Not an express.");
+                }
+            }*/
+        }
+        return byteValueToConcreteValue;
     }
 }
 

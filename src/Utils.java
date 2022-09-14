@@ -1,6 +1,7 @@
 import soot.*;
 import soot.jimple.*;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -97,20 +98,20 @@ public class Utils {
     }
 
 
-    public static boolean isUsedValueOfAssignment(AssignStmt as, Value v) {
+    public static boolean isRightValueOfAssignment(AssignStmt as, Value v) {
         if(as == null || v == null) return false;
         List<ValueBox> vbs = as.getUseBoxes();
+        Value left_value = as.getLeftOp();
         for (ValueBox vb : vbs) {
-            if (vb.getValue().equals(v)) return true;
+            Value use_value = vb.getValue();
+            if (use_value.equals(v) && !left_value.toString().contains(v.toString())) return true;
         }
         return false;
     }
 
-    public static boolean isDefValueOfAssignment(AssignStmt as, Value v){
+    public static boolean isLeftValueOfAssignment(AssignStmt as, Value v){
         if(as==null || v == null) return false;
-        for(ValueBox vb: as.getDefBoxes()){
-            if (vb.getValue().equals(v)) return true;
-        }
+        if(as.getLeftOp().equals(v)) return true;
         return false;
     }
 
@@ -155,12 +156,19 @@ public class Utils {
         return false;
     }
 
-    public static String generatePartingLine(String symbol){
+    public static void printPartingLine(String symbol){
         String s = "";
         for(int i = 0; i<100;i++){
             s+=symbol;
         }
         System.out.println(s);
+    }
+
+    public static String generatePartingLine(String symbol){
+        String s = "";
+        for(int i = 0; i<100;i++){
+            s+=symbol;
+        }
         return s;
     }
 
@@ -195,15 +203,15 @@ public class Utils {
         // Get the corresponding implemented classes.
         Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
         if(implemented_classes == null){
-            Utils.generatePartingLine("!");
+            Utils.printPartingLine("!");
             System.out.println("Special abstract class. Cannot find the implemented class of " + abstract_cls.getName());
-            Utils.generatePartingLine("!");
+            Utils.printPartingLine("!");
             return null;
         }
         if(implemented_classes.size()>1){
-            Utils.generatePartingLine("!");
+            Utils.printPartingLine("!");
             System.out.println("Special abstract classes, more than one implemented classes: " + implemented_classes);
-            Utils.generatePartingLine("!");
+            Utils.printPartingLine("!");
         }
         //Choose the first found implemented method.
         for(SootClass implemented_cls : implemented_classes){
@@ -231,9 +239,9 @@ public class Utils {
                 }
             }
         }
-        Utils.generatePartingLine("!");
+        Utils.printPartingLine("!");
         System.out.println("Special abstract method. Cannot find the implemented method of " + abstract_method.getSignature());
-        Utils.generatePartingLine("!");
+        Utils.printPartingLine("!");
         return null;
     }
 
@@ -246,6 +254,27 @@ public class Utils {
         return b;
     }
 
+    public static int getIndexOfUnit(Body body, Unit unit){
+        if(body==null || unit == null) return -1;
+        return bodyToList(body).indexOf(unit);
+    }
+
+    public static String getConcreteAssignmentOfByteValue(Body body, Unit unit, Value v){
+        Unit pre = body.getUnits().getPredOf(unit);
+        if(pre instanceof AssignStmt){
+            AssignStmt as = (AssignStmt) pre;
+            if(as.getDefBoxes().get(0).getValue().equals(v)){
+                if(as.getUseBoxes().size() == 1){
+                    Value vv = as.getUseBoxes().get(0).getValue();
+                    if(vv.getType().toString().equals("int")){
+                        return vv.toString();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public static <T> List<T> deepCopy(List<T> src) {
         List<T> dest = new ArrayList<>();
         if(src == null){
@@ -255,6 +284,23 @@ public class Utils {
             dest.add(object);
         }
         return dest;
+    }
+
+    public static boolean isExpress(String str){
+        char[] ops = {'&', '|', '!','+', '-', '*', '/', '%', '^'};
+        for(char op : ops){
+            if(str.contains(String.valueOf(op))) return true;
+        }
+        return false;
+    }
+
+    public static void pause(){
+        try{
+            System.out.println("Enter anything to continue ...");
+            char in = (char) System.in.read();
+        } catch (IOException e){
+            e.printStackTrace();
+        }
     }
 }
 
