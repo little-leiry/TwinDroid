@@ -198,8 +198,8 @@ public class Utils {
         } else {
             abstract_cls = abstract_method.getDeclaringClass();
         }
-        System.out.println("++++: " + ifi);
-        System.out.println("abstract class: " + abstract_cls);
+        System.out.println(ifi);
+        System.out.println("--- abstract class: " + abstract_cls);
         // Get the corresponding implemented classes.
         Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
         if(implemented_classes == null){
@@ -218,7 +218,7 @@ public class Utils {
             for(SootMethod method : implemented_cls.getMethods()){
                 if(method.isConcrete()){
                     if(method.getSubSignature().equals(abstract_method.getSubSignature())){
-                        System.out.println("abstract method: " + abstract_method.getSignature());
+                        System.out.println("--- abstract method: " + abstract_method.getSignature());
                         if(method.getDeclaration().contains(" volatile ")) { // The return types of the abstract method and its implemented method are different.
                             Body body = method.retrieveActiveBody();
                             for (Unit unit : body.getUnits()) {
@@ -227,13 +227,13 @@ public class Utils {
                                     SootMethod implemented_method = i.getMethod();
                                     if(implemented_method.getName().equals(abstract_method.getName()) &&
                                             implemented_method.getParameterTypes().equals(abstract_method.getParameterTypes())) { // The actually implemented method.
-                                        System.out.println("implemented method: " + implemented_method.getSignature());
+                                        System.out.println("--- implemented method: " + implemented_method.getSignature());
                                         return implemented_method;
                                     }
                                 }
                             }
                         }
-                        System.out.println("implemented method: " + method.getSignature());
+                        System.out.println("--- implemented method: " + method.getSignature());
                         return method;
                     }
                 }

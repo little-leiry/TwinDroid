@@ -1,6 +1,7 @@
-import com.sun.org.apache.xerces.internal.impl.dv.xs.AnyURIDV;
 import soot.*;
 import soot.jimple.*;
+import soot.toolkits.graph.Block;
+import soot.toolkits.graph.CompleteBlockGraph;
 import soot.toolkits.scalar.Pair;
 
 import javax.script.ScriptEngine;
@@ -29,7 +30,8 @@ public class Tainted {
     // method => List of Pair<element name, data structure>
     public static Map<Tainted, Set<Pair<String, Value>>> taintedPointToElementAndDataStructures = new HashMap<Tainted, Set<Pair<String, Value>>>();
 
-    public static final String log_file = "log_data.txt";
+    public static final String element_data = "element_data.txt";
+    public static final String method_data = "method_data.txt";
 
     public Tainted(SootMethod method, Value value, String element, List<SootMethod> parents) {
         mMethod = method;
@@ -117,15 +119,17 @@ public class Tainted {
         } else {
             structure = data_structure.getType().toString();
         }
-        Log.logData(log_file, Utils.generatePartingLine("-"));
-        Log.logData(log_file, "associated element: " + associated_element);
-        Log.logData(log_file, "data structure: " + structure);
-        Log.logData(log_file, "call path: ");
+        // Log data.
+        Log.logData(element_data, Utils.generatePartingLine("="));
+        Log.logData(element_data, "+ associated element: " + associated_element);
+        Log.logData(element_data, "+ data structure: " + structure);
+        Log.logData(element_data, "+ call path:");
         List<SootMethod> methods = Utils.deepCopy(entry_parents);
         methods.add(entry_method);
         for(SootMethod m : methods){
-            Log.logData(log_file, m.getSignature());
+            Log.logData(element_data, m.getSignature());
         }
+
         Set<Value> ds = associatedElementToDataStructures.get(associated_element);
         if (ds == null) { // This key does not exist.
             ds = new HashSet<>();
@@ -150,9 +154,16 @@ public class Tainted {
             structure = data_structure.getType().toString();
         }
         Utils.printPartingLine("~");
-        System.out.println("element: " + element);
-        System.out.println("data structure: " + structure);
+        System.out.println("Element: " + element);
+        System.out.println("Data structure: " + structure);
         Utils.printPartingLine("~");
+
+        // Log data.
+        Log.logData(method_data, Utils.generatePartingLine("-"));
+        Log.logData(method_data, "Element: " + element);
+        Log.logData(method_data, "Data structure: " + structure);
+        //Log.logData(method_data, Utils.generatePartingLine("-"));
+
         Set<Pair<String, Value>> e_ds = taintedPointToElementAndDataStructures.get(tainted_point);
         Pair<String, Value> e_d = new Pair<String, Value>(element, data_structure);
         if (e_ds == null) { // This key does not exist.
@@ -280,15 +291,19 @@ public class Tainted {
         }
     }
 
+    // skip_names: important names. These names are unlikely an element name.
     // skip_methods, skip_classes: important methods / classes. If a statement contains this kind of methods / classes, just skipping this statement.
     // no_analyzed_methods, no_analyzed_classes: these methods' / classes' functions have been known, no need to be analyzed.
-    public static void dataFlowAnalysisForMethod(Tainted entry, List<String> skip_methods, List<String> no_analyzed_methods, List<String> skip_classes, List<String> no_analyzed_classes) {
+    public static void dataFlowAnalysisForBlocks(Tainted entry, List<Block> blocks) {
         SootMethod entry_method = entry.getMethod();
         Value entry_value = entry.getValue();
         String entry_element = entry.getElement();
         Unit start_unit = entry.getStartUnit();
         int flag_start = 0;
         List<SootMethod> entry_parents = entry.getParents();
+        //Log data.
+        Log.logData(method_data, Utils.generatePartingLine("*"));
+        Log.logData(method_data, "Method: " + entry_method.getSignature());
 
         String element = null; // For the non-switch-case situation.
         List<String> elements = null; // For the switch-case situation.
@@ -388,12 +403,14 @@ public class Tainted {
             // Store some information before updating the elements.
             if(case_num!=0 && elementToUnit.containsValue(unit)){ // Switch-case situation.
                 if(elements!=null){ // Have solved one element case.
+                    System.out.println("Store information -- element update.");
                     data_structure = tainted_value;
                     tainted_value = null;
                     String e = elements.toString();
                     storeTaintedPointAndCorrespondingElementAndDataStructure(entry, e, data_structure); // This element only related to the entry method.
                     String associated_element = getAssociatedElement(entry_element, e);
                     storeAssociatedElementAndCorrespondingDataStructure(entry_method, entry_parents, associated_element, data_structure); // This element related to the entry method and its parents.
+                    pass_tainted_value = 1;
                 }
                 // Update the associated element list.
                 elements = getElementsOfUnit(unit, elementToUnit);
@@ -448,25 +465,36 @@ public class Tainted {
             }
 
             // Get the element's name.
-            // Store some information before updating the element.
             if (callee_name.equals("equals")) {
+                String old_element = null;
+                if (i.getArg(0) instanceof StringConstant) { // parser.getName().equals(element)
+                    String s = i.getArg(0).toString();
+                    if(! SkipInfo.skip_names.contains(s)) {
+                        old_element = element;
+                        element = s;
+                        flag_element = 1;
+                    }
+                } else if (base != null) { // element.equals(parser.getName())
+                    if (valueToLikelyElement.containsKey(base)) {
+                        String s = valueToLikelyElement.get(base);
+                        if(! SkipInfo.skip_names.contains(s)) {
+                            old_element = element;
+                            element = s;
+                            flag_element = 1;
+                        }
+                    }
+                }
+                // Store some information before updating the element.
                 if(case_num == 0 || (case_num!=0 && elementToUnit.size() == case_num)){ // Non-switch-case situation.
-                    if(element!=null){ // Have solved one element case, store the result.
+                    if(old_element!=null){ // Have solved one element case, store the result.
+                        System.out.println("Store information -- element update.");
                         data_structure = tainted_value;
                         tainted_value = null;
-                        String e = element; // This element only related to the entry method.
+                        String e = old_element; // This element only related to the entry method.
                         storeTaintedPointAndCorrespondingElementAndDataStructure(entry, e, data_structure);
                         String associated_element = getAssociatedElement(entry_element, e); // This element related to the entry method and its parents.
                         storeAssociatedElementAndCorrespondingDataStructure(entry_method, entry_parents, associated_element, data_structure);
-                    }
-                }
-                if (i.getArg(0) instanceof StringConstant) { // parser.getName().equals(element)
-                    element = i.getArg(0).toString();
-                    flag_element = 1;
-                } else if (base != null) { // element.equals(parser.getName())
-                    if (valueToLikelyElement.containsKey(base)) {
-                        element = valueToLikelyElement.get(base);
-                        flag_element = 1;
+                        pass_tainted_value = 1;
                     }
                 }
             }
@@ -505,20 +533,29 @@ public class Tainted {
                     } else {
                         Utils.printPartingLine("+");
                         System.out.println("Special case (default case ID): " + unit);
-                        // There is a default case ID.
-                        List<String> case_ids = Utils.intToList(case_num);
-                        for (String case_id : case_ids) {
-                            if (!caseIdToElement.containsKey(case_id)) {
-                                System.out.println(case_id + " => " + element);
-                                caseIdToElement.put(case_id, element);
-                            }
-                        }
+                        caseIdToElement.put("default", element);
+                        System.out.println("default" + " => " + element);
                         Utils.printPartingLine("+");
                     }
                     // This element case has been solved, reset the element, flag and counter.
                     element = null;
                     flag_element = 0;
                     count = 0;
+                }
+            }
+
+            // There is a default case ID.
+            if(case_num!=0 && caseIdToElement.size() == case_num) {
+                if(caseIdToElement.containsKey("default")) {
+                    String e = caseIdToElement.get("default");
+                    List<String> case_ids = Utils.intToList(case_num);
+                    for (String case_id : case_ids) {
+                        if (!caseIdToElement.containsKey(case_id)) {
+                            Utils.printPartingLine("-");
+                            System.out.println(case_id + " => " + e);
+                            caseIdToElement.put(case_id, e);
+                        }
+                    }
                 }
             }
 
@@ -585,7 +622,7 @@ public class Tainted {
                 } else {
                     declaring_class = callee.getDeclaringClass().getName();
                 }
-                if (skip_methods.contains(callee_name) || skip_classes.contains(declaring_class)) {
+                if (SkipInfo.skip_methods.contains(callee_name) || SkipInfo.skip_classes.contains(declaring_class)) {
                     System.out.println("--- Pass.");
                     continue;
                 }
@@ -599,8 +636,8 @@ public class Tainted {
                     System.out.println("--- Pass.");
                     continue;
                 }
-                if (!no_analyzed_methods.contains(callee_name) && !no_analyzed_classes.contains(declaring_class)) {
-                    System.out.println("--- Record the tainted method. ");
+                if (!SkipInfo.no_analyzed_methods.contains(callee_name) && !SkipInfo.no_analyzed_classes.contains(declaring_class)) {
+                    System.out.println("--- Record the tainted method: " + callee_name);
                     if (i instanceof InterfaceInvokeExpr) { // Invoke an abstract method, try to get its body.
                         Utils.printPartingLine("+");
                         InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) i;
@@ -629,7 +666,7 @@ public class Tainted {
             }
 
             // Pass the tainted value.
-            if (assignStmt == 1 && pass_tainted_value == 1) {
+            if (assignStmt == 1) {
                 AssignStmt as = (AssignStmt) unit;
                 // Treat the tainted value as a whole, ignore the part (i.e., the attribution) of it.
                 //Transfer the type of the tainted / entry value.
@@ -643,22 +680,27 @@ public class Tainted {
                 // The tainted value is re-tainted by the entry value.
                 if(flag_entry==1){
                     if (tainted_value != null) {  // Have got one tainted result (by the entry value).
+                        System.out.println("Store information -- re-tainted by the entry value.");
                         data_structure = tainted_value;
                         String e = getElement(element, elements); // This element only related to the entry method.
                         storeTaintedPointAndCorrespondingElementAndDataStructure(entry, e, data_structure);
                         String associated_element = getAssociatedElement(entry_element, e); // This element related to the entry method and its parents.
                         storeAssociatedElementAndCorrespondingDataStructure(entry_method, entry_parents,associated_element, data_structure);
+                        pass_tainted_value = 1;
                     }
                 }
-                System.out.println("--- Update the tainted value.");
-                tainted_value = ((AssignStmt) unit).getLeftOp();
-                if (tainted_value.getType().toString().endsWith("parsing.result.ParseResult")) {
-                    pass_tainted_value = 0; // Only result.getResult can be passed, when the tainted value is the type of ParseResult.
+                if(pass_tainted_value == 1) {
+                    tainted_value = ((AssignStmt) unit).getLeftOp();
+                    System.out.println("--- Update the tainted value: " + tainted_value);
+                    if (tainted_value.getType().toString().endsWith("parsing.result.ParseResult")) {
+                        pass_tainted_value = 0; // Only result.getResult can be passed, when the tainted value is the type of ParseResult.
+                    }
                 }
             }
         }
 
         // Store some information.
+        System.out.println("Store information -- analyze completely.");
         data_structure = tainted_value;
         String e = getElement(element, elements); // This element only related to the entry method.
         storeTaintedPointAndCorrespondingElementAndDataStructure(entry, e, data_structure);
@@ -670,6 +712,24 @@ public class Tainted {
             System.out.println("Special situation of the element: this method contains both switch-case and non-switch-case situations.");
             System.out.println(entry_method);
             Utils.printPartingLine("+");
+        }
+    }
+
+    public static void dataFlowAnalysisForElements(Tainted entry){
+        SootMethod entry_method = entry.getMethod();
+        Body body = null;
+        if (entry_method.isConcrete()) {
+            body = entry_method.retrieveActiveBody();
+        } else {
+            Utils.printPartingLine("!");
+            System.out.println("This method does not have a body.");
+            Utils.printPartingLine("!");
+            exit(0);
+        }
+        CompleteBlockGraph cbg = new CompleteBlockGraph(body);
+        List<Block> heads  = cbg.getHeads();
+        for(Block head : heads){
+            Graph.generateCallPathsFromBlock(head);
         }
     }
 }
