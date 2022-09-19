@@ -2,6 +2,7 @@ import soot.*;
 import soot.jimple.*;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -97,8 +98,10 @@ public class Utils {
         return parameter;
     }
 
-
-    public static boolean isRightValueOfAssignment(AssignStmt as, Value v) {
+    // Judge whether a value:
+    // 1) is one of the assignment's use values and
+    // 2) this value does not appear in the left of the assignment.
+    public static boolean isRightValueOfAssignStmt(AssignStmt as, Value v) {
         if(as == null || v == null) return false;
         List<ValueBox> vbs = as.getUseBoxes();
         Value left_value = as.getLeftOp();
@@ -109,17 +112,42 @@ public class Utils {
         return false;
     }
 
-    public static boolean isLeftValueOfAssignment(AssignStmt as, Value v){
+    public static boolean hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
+        if(as == null || values == null) return false;
+        for(Value v : values){
+            if(isRightValueOfAssignStmt(as, v)) return true;
+        }
+        return false;
+    }
+
+    public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
         if(as==null || v == null) return false;
         if(as.getLeftOp().equals(v)) return true;
         return false;
     }
 
-    public static int isParameter(InvokeExpr i, Value v) {
+    public static int hasLeftValueOfAssignStmt(AssignStmt as, List<Value> values){
+        if(as==null || values==null) return -1;
+        for(Value v : values){
+            if(isLeftValueOfAssignStmt(as, v)) return values.indexOf(v);
+        }
+        return -1;
+    }
+
+    public static int isParameterOfInvokeStmt(InvokeExpr i, Value v) {
         if(i == null || v == null) return -1;
         List<Value> parameters = i.getArgs();
         if (parameters.contains(v)) {
             return parameters.indexOf(v);
+        }
+        return -1;
+    }
+
+    public static int hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
+        if(i == null || values == null) return -1;
+        for(Value v : values){
+            int index = isParameterOfInvokeStmt(i, v);
+            if(index != -1) return index;
         }
         return -1;
     }
@@ -156,6 +184,14 @@ public class Utils {
         return false;
     }
 
+    public static void printPartingLine(String symbol, PrintWriter pw){
+        String s = "";
+        for(int i = 0; i<100;i++){
+            s+=symbol;
+        }
+        pw.println(s);
+    }
+
     public static void printPartingLine(String symbol){
         String s = "";
         for(int i = 0; i<100;i++){
@@ -163,6 +199,7 @@ public class Utils {
         }
         System.out.println(s);
     }
+
 
     public static String generatePartingLine(String symbol){
         String s = "";
@@ -198,8 +235,10 @@ public class Utils {
         } else {
             abstract_cls = abstract_method.getDeclaringClass();
         }
-        System.out.println(ifi);
-        System.out.println("--- abstract class: " + abstract_cls);
+        //System.out.println(ifi);
+        //System.out.println("--- abstract class: " + abstract_cls);
+        Log.logData(Tainted.analysis_data, "+ " + ifi);
+        Log.logData(Tainted.analysis_data, "--- abstract class: " + abstract_cls);
         // Get the corresponding implemented classes.
         Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
         if(implemented_classes == null){
@@ -218,7 +257,8 @@ public class Utils {
             for(SootMethod method : implemented_cls.getMethods()){
                 if(method.isConcrete()){
                     if(method.getSubSignature().equals(abstract_method.getSubSignature())){
-                        System.out.println("--- abstract method: " + abstract_method.getSignature());
+                        //System.out.println("--- abstract method: " + abstract_method.getSignature());
+                        Log.logData(Tainted.analysis_data, "--- abstract method: " + abstract_method.getSignature());
                         if(method.getDeclaration().contains(" volatile ")) { // The return types of the abstract method and its implemented method are different.
                             Body body = method.retrieveActiveBody();
                             for (Unit unit : body.getUnits()) {
@@ -227,13 +267,15 @@ public class Utils {
                                     SootMethod implemented_method = i.getMethod();
                                     if(implemented_method.getName().equals(abstract_method.getName()) &&
                                             implemented_method.getParameterTypes().equals(abstract_method.getParameterTypes())) { // The actually implemented method.
-                                        System.out.println("--- implemented method: " + implemented_method.getSignature());
+                                        //System.out.println("--- implemented method: " + implemented_method.getSignature());
+                                        Log.logData(Tainted.analysis_data, "--- implemented method: " + implemented_method.getSignature());
                                         return implemented_method;
                                     }
                                 }
                             }
                         }
-                        System.out.println("--- implemented method: " + method.getSignature());
+                        //System.out.println("--- implemented method: " + method.getSignature());
+                        Log.logData(Tainted.analysis_data, "--- implemented method: " + method.getSignature());
                         return method;
                     }
                 }
@@ -300,6 +342,15 @@ public class Utils {
             char in = (char) System.in.read();
         } catch (IOException e){
             e.printStackTrace();
+        }
+    }
+
+    public static boolean hasDuplicatedItems(List<List<Integer>> paths){
+        long count = paths.stream().distinct().count();
+        if(count == paths.size()){
+            return false;
+        }else{
+            return true;
         }
     }
 }
