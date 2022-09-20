@@ -25,7 +25,7 @@ public class framework {
     public static void main(String[] args) throws IOException, InterruptedException {
         sootInitial(path);
         Utils.initializeAbstractClassesInfo();
-        test3();
+        test();
         /*ElementInfo test = new ElementInfo();
         test6(test);
         System.out.println(test.getCaseNum());
@@ -155,9 +155,9 @@ public class framework {
                     Log.logData(Tainted.analysis_data, "This method has been analysed.");
                     Set<Pair<String, Value>> e_ds = Tainted.taintedPointToElementAndDataStructures.get(atp);
                     if(e_ds==null){
-                        Log.logData(Tainted.analysis_data, Utils.generatePartingLine("!"));
-                        Log.logData(Tainted.analysis_data,"cannot find the corresponding tainted point of method " + tainted_method);
-                        Log.logData(Tainted.analysis_data, Utils.generatePartingLine("!"));
+                        Utils.generatePartingLine("!");
+                        System.out.println("cannot find the corresponding tainted point of method " + tainted_method);
+                        Utils.generatePartingLine("!");
                         exit(0);
                     }
                     Tainted.taintedPointToElementAndDataStructures.put(tainted_point, e_ds);
@@ -233,16 +233,43 @@ public class framework {
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
-        String methodSig = sigs[0];
+        String methodSig = sigs[1];
         Body body = Utils.getBodyOfMethod(methodSig);
-        Log.logBody(body);
+        //Map<Value, String> valueToLikelyElement = new HashMap<>();
+        List<Value> values = new ArrayList<>();
+        for(Unit u : body.getUnits()){
+            /*if(u instanceof IdentityStmt){
+                Value v = ((IdentityStmt) u).getLeftOp();
+                values.add(v);
+            }
+            if(u instanceof AssignStmt){
+                AssignStmt as = (AssignStmt) u;
+                if(Utils.isCopyOfValues(as, values)){
+                    System.out.println(u);
+                }*/
+                /*InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                if(ie!=null && ie.getMethod().getName().equals("getResult")){
+                    System.out.println(as.getUseBoxes());
+                    break;
+                }*/
+                //Tainted.storeValueAndCorrespondingLikelyElement(as, valueToLikelyElement);
+            if(u instanceof IfStmt){
+            IfStmt is = (IfStmt) u;
+                System.out.println(u);
+                System.out.println(is.getConditionBox());
+                System.out.println(is.getTarget());
+                System.out.println(is.getUseBoxes());
+                System.out.println();
+            }
+        }
+        /*Log.logBody(body);
         //System.out.println(body);
         CompleteBlockGraph tug = new CompleteBlockGraph(body);
-        Log.logCBG(tug);
+        Log.logCBG(tug);*/
         /*for(Block b : tug.getBlocks()){
             tug.getExceptionalPredsOf(b);
         }*/
-        System.out.println(tug.getHeads().size());
+        /*System.out.println(tug.getHeads().size());
         Block start_block = null;
         for(Block b : tug.getBlocks()){
             for(Unit u : b){
@@ -254,7 +281,7 @@ public class framework {
             if(start_block!=null) break;
         }
         System.out.println(start_block.getIndexInMethod());
-        Graph.generatePathsFromBlock(start_block);
+        Graph.generatePathsFromBlock(start_block);*/
         //List<Block> blocks  = tug.getHeads();
        // System.out.println(blocks.size());
 
@@ -573,14 +600,14 @@ public class framework {
         System.out.println(call_path);*/
         //System.out.println(Utility.isNumeric("000"));
         //Utility.printSymbols("-");
-        Pair<String, String> p1 = new Pair<>("a", "b");
+        /*Pair<String, String> p1 = new Pair<>("a", "b");
         Pair<String, String> p2 = new Pair<>("a", "b");
         System.out.println(p1.equals(p2));
         Set<Pair<String, String>> p = new HashSet<>();
         p.add(p1);
         //p.add(p2);
         System.out.println(p.contains(p2));
-        System.out.println(p.size());
+        System.out.println(p.size());*/
         /*InvokeExpr i =null;
         System.out.println(i instanceof VirtualInvokeExpr);*/
         /*List<String> a = null;
@@ -590,7 +617,7 @@ public class framework {
         /*String a = "1";
         String b = "2";
         String s = "a + b";
-        String s1 = "0 + 1";
+        String s1 = "0 == 1";
         System.out.println(Utils.isExpress(s1));
         ScriptEngineManager sem = new ScriptEngineManager();
         ScriptEngine se = sem.getEngineByName("js");
@@ -613,21 +640,20 @@ public class framework {
         //Log.deleteData(Tainted.element_data);
         //List<String> data = Log.readData(Tainted.element_data);
         //System.out.println(data);
-        //List<List<Integer>> l = new ArrayList<>();
-        /*List<Integer> l11 = new ArrayList<>();
-        //l11.add(1);
-        //l11.add(3);
+        List<List<Integer>> l = new ArrayList<>();
+        List<Integer> l11 = new ArrayList<>();
+        l11.add(1);
+        l11.add(3);
         l.add(l11);
-        List<List<Integer>> l2 = new ArrayList<>();
         List<Integer> l22 = new ArrayList<>();
         l22.add(2);
         l22.add(3);
         l.add(l22);
-        l11.removeAll(l22);
-        System.out.println(l11);
         System.out.println(l);
-        Collections.sort(l, new ListComparator());
-        System.out.println(l);*/
+        List<Integer> l33 = l.get(0);
+        l.remove(0);
+        System.out.println(l);
+        System.out.println(l33);
         /*List<Integer> l =new ArrayList<>();
         l.add(0);
         l.add(1);
@@ -637,6 +663,9 @@ public class framework {
             l.remove(0);
         }
 */
+       /* List<String> a = new ArrayList<>();
+        //a.add("A");
+        System.out.println(a.contains(null));*/
     }
     public static void test6(ElementInfo test){
         test.getCaseIdToElement().put("1","test");

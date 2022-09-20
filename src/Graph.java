@@ -32,7 +32,6 @@ public class Graph {
             //System.out.println("--- " + call_path);
             List<Integer> call_path_copy = Utils.deepCopy(path);
             paths.add(call_path_copy);
-            System.out.println(paths.size());
         }
 
         path.remove((Integer) block_id); // Delete current block when it has been searched completely.

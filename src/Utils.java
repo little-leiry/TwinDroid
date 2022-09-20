@@ -43,6 +43,8 @@ public class Utils {
     }
 
     public static Value getBaseOfInvokeExpr(InvokeExpr i){
+        if(i==null) return null;
+
         if (i instanceof VirtualInvokeExpr) {
             return ((VirtualInvokeExpr) i).getBase();
         } else if (i instanceof InterfaceInvokeExpr) {
@@ -328,10 +330,41 @@ public class Utils {
         return dest;
     }
 
+    public static <K, V> Map<K, V> deepCopy(Map<K, V> src) {
+        Map<K, V> dest = new HashMap<K, V>();
+        if(src == null){
+            return dest;
+        }
+        for(Map.Entry<K, V> entry : src.entrySet()){
+            dest.put(entry.getKey(), entry.getValue());
+        }
+        return dest;
+    }
+
     public static boolean isExpress(String str){
         char[] ops = {'&', '|', '!','+', '-', '*', '/', '%', '^'};
         for(char op : ops){
             if(str.contains(String.valueOf(op))) return true;
+        }
+        return false;
+    }
+
+    // r7 = r4, r7 = (String) r4
+    // r7 is a copy of r4
+    public static boolean isCopyOfValues(AssignStmt as, List<Value> values){
+        if(as==null || values == null) return false;
+        InvokeExpr ie = getInvokeOfAssignStmt(as);
+        List<ValueBox> vbs = as.getUseBoxes();
+        // There is a copy of entry value.
+        if(vbs.size()==1 && ie == null){
+            Value use_value = as.getRightOp();
+            if(values.contains(use_value)){
+                return true;
+            }
+        } else if(vbs.size() == 2 && ie == null){
+            if(vbs.get(0).getValue().toString().startsWith("(") && values.contains(vbs.get(1).getValue())){
+                return true;
+            }
         }
         return false;
     }
