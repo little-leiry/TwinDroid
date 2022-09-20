@@ -158,8 +158,9 @@ public class Tainted {
 
     // element: only related to the current analyzed method.
     public static void storeTaintedPointAndCorrespondingElementAndDataStructure(Tainted tainted_point, String element, Value data_structure) {
+        String s = element;
         if(element == null){
-            element = "NULL";
+            s = "NULL";
         }
         String structure;
         if (data_structure == null){
@@ -171,7 +172,7 @@ public class Tainted {
         }
 
         Log.logData(analysis_data, Utils.generatePartingLine("~"));
-        Log.logData(analysis_data, "- Element: " + element);
+        Log.logData(analysis_data, "- Element: " + s);
         Log.logData(analysis_data, "- Data structure: " + structure);
         Log.logData(analysis_data, Utils.generatePartingLine("~"));
 
@@ -183,14 +184,14 @@ public class Tainted {
             taintedPointToElementAndDataStructures.put(tainted_point, e_ds);
             // Log.
             Log.logData(method_data, Utils.generatePartingLine("="));
-            Log.logData(method_data, "+ Element: " + element);
+            Log.logData(method_data, "+ Element: " + s);
             Log.logData(method_data, "+ Data structure: " + structure);
         } else {
             if(!e_ds.contains(e_d)) { // Avoid duplicated logs.
                 e_ds.add(e_d);
                 // Log data.
                 Log.logData(method_data, Utils.generatePartingLine("="));
-                Log.logData(method_data, "+ Element: " + element);
+                Log.logData(method_data, "+ Element: " + s);
                 Log.logData(method_data, "+ Data structure: " + structure);
                 //Log.logData(method_data, Utils.generatePartingLine("-"));
             }
@@ -449,8 +450,8 @@ public class Tainted {
     // skip_methods, skip_classes: important methods / classes. If a statement contains this kind of methods / classes, just skipping this statement.
     // no_analyzed_methods, no_analyzed_classes: these methods' / classes' functions have been known, no need to be analyzed.
     public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> block_ids, Tainted entry, List<Value> entry_value_copies, int flag_case, int flag_start,
-                                                 Map<Value, String> numericValueToConcreteAssignment, List<Integer> skip_block_ids,
-                                                 List<SootMethod> stored_methods, Map<Value, String> valueToLikelyElement) {
+                                                 Map<Value, String> numericValueToConcreteAssignment, Set<Integer> skip_block_ids, List<SootMethod> stored_methods,
+                                                 Set<Unit> target_units, Map<Value, String> valueToLikelyElement) {
 
         SootMethod entry_method = entry.getMethod();
         String entry_element = entry.getElement();
@@ -469,8 +470,6 @@ public class Tainted {
         Value tainted_value = null;
         int pass_tainted_value = 1; // Flag that the current tainted value can be updated.
 
-        Set<Unit> target_units = new HashSet<>(); // The target units of IfStmt /
-
         for (int i = 0; i< block_ids.size(); i++) {
             int block_id = block_ids.get(i);
             Block block = blocks.get(block_id);
@@ -488,6 +487,13 @@ public class Tainted {
                         storeUsefulInfo(as, entry_value_copies, flag_case, numericValueToConcreteAssignment_path, valueToLikelyElement_path);
                     }
                     continue;
+                }
+
+                // Cannot skip a target block;
+                if(flag_skip == 1 && target_units.contains(block.getHead())){
+                    // System.out.println(block.getHead());
+                    // System.out.println(block_id);
+                    flag_skip = 0;
                 }
 
                 InvokeExpr ie = null;
@@ -514,7 +520,7 @@ public class Tainted {
                     // LookupSwitchStmt($i1){case -12356 goto z0 = equals(XXX), b2 = 0}
                     // LookupSwitchStmt(b2){case 0 goto $r6 = parseXXX(parser)}
                     if (unit instanceof LookupSwitchStmt) {
-                        flag_skip &= 0;
+                        flag_skip = 0;
                         LookupSwitchStmt lss = (LookupSwitchStmt) unit;
                         if (case_value == null) { // Get the bridge case value between two LookupSwitchStmts.
                             Unit default_unit = lss.getDefaultTarget();
@@ -529,6 +535,8 @@ public class Tainted {
                         }
                         // Filter wrong paths.
                         if (case_value != null && lss.getUseBoxes().get(0).getValue().equals(case_value)) {
+                            target_units.addAll(Utils.deepCopy(lss.getTargets()));
+                            target_units.add(lss.getDefaultTarget());
                             String case_id = numericValueToConcreteAssignment_path.get(case_value); // Find the case id associated with this path.
                             if (case_id != null) {
                                 int id = Integer.parseInt(case_id);
@@ -539,21 +547,26 @@ public class Tainted {
                                     target_unit = lss.getDefaultTarget();
                                 }
                                 if (target_unit != null) {
-                                    target_units.add(target_unit);
-                                    Unit next_block_head = blocks.get(block_ids.get(i + 1)).getHead();
-                                    Log.logData(analysis_data, Utils.generatePartingLine("+"));
-                                    Log.logData(analysis_data, "Case value: " + case_value + " => " + case_id);
-                                    Log.logData(analysis_data, "Target unit: " + target_unit);
-                                    Log.logData(analysis_data, "Next block head: " + next_block_head);
-                                    Log.logData(analysis_data, Utils.generatePartingLine("+"));
-                                    // If the next block's first Unit is not the target Unit, this path is incorrect.
-                                    if (!next_block_head.equals(target_unit)) {
-                                        Utils.generatePartingLine("!");
-                                        Log.logData(analysis_data, "Wrong path, stop analyzing!");
-                                        Utils.generatePartingLine("!");
-                                        return;
+                                    if(i + 1 < block_ids.size()) {
+                                        Unit next_block_head = blocks.get(block_ids.get(i + 1)).getHead();
+                                        Log.logData(analysis_data, Utils.generatePartingLine("+"));
+                                        Log.logData(analysis_data, "Case value: " + case_value + " => " + case_id);
+                                        Log.logData(analysis_data, "Target unit: " + target_unit);
+                                        Log.logData(analysis_data, "Next block head: " + next_block_head);
+                                        Log.logData(analysis_data, Utils.generatePartingLine("+"));
+                                        // If the next block's first Unit is not the target Unit, this path is incorrect.
+                                        if (!next_block_head.equals(target_unit)) {
+                                            Utils.generatePartingLine("!");
+                                            Log.logData(analysis_data, "Wrong path, stop analyzing!");
+                                            Utils.generatePartingLine("!");
+                                            return;
+                                        }
+                                    } else {
+                                        Log.logData(analysis_data, Utils.generatePartingLine("!"));
+                                        Log.logData(analysis_data, "Special path, the end block contains LookupSwitchStmt.");
+                                        Log.logData(analysis_data, block_ids.toString());
+                                        Log.logData(analysis_data, Utils.generatePartingLine("!"));
                                     }
-
                                 } else {
                                     Utils.generatePartingLine("!");
                                     System.out.println("Cannot find the target Unit of the case ID [ " + case_id + " ].");
@@ -578,7 +591,7 @@ public class Tainted {
 
                 // Filter wrong paths.
                 if(unit instanceof IfStmt){
-                    flag_skip &= 0;
+                    flag_skip = 0;
                     IfStmt is = (IfStmt) unit;
                     // Judge whether the condition is met.
                     // Replace the Value with its concrete assignment.
@@ -612,27 +625,34 @@ public class Tainted {
                             Utils.generatePartingLine("!");
                             exit(0);
                         }
-                        System.out.println(is);
-                        System.out.println(condition);
+                        //System.out.println(is);
+                        //System.out.println(condition);
                         target_units.add(target_unit);
                         ScriptEngineManager sem = new ScriptEngineManager();
                         ScriptEngine se = sem.getEngineByName("js");
                         try {
                             boolean result = (boolean) se.eval(condition);
-                            if(result){
-                                // When the condition is met, if the next block's first Unit is not the target Unit, this path is incorrect.
-                                if (!blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
-                                    Log.logData(analysis_data, "--- Wrong path, stop analyzing!");
-                                    return;
+                            if(i + 1 <block_ids.size()) {
+                                if (result) {
+                                    // When the condition is met, if the next block's first Unit is not the target Unit, this path is incorrect.
+                                    if (!blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
+                                        Log.logData(analysis_data, "--- Wrong path, stop analyzing!");
+                                        return;
+                                    }
+                                } else {
+                                    // When the condition is not met, if the next block's first Unit is the target Unit, this path is incorrect.
+                                    if (blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
+                                        Utils.generatePartingLine("!");
+                                        Log.logData(analysis_data, "Wrong path, stop analyzing!");
+                                        Utils.generatePartingLine("!");
+                                        return;
+                                    }
                                 }
                             } else {
-                                // When the condition is not met, if the next block's first Unit is the target Unit, this path is incorrect.
-                                if (blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
-                                    Utils.generatePartingLine("!");
-                                    Log.logData(analysis_data, "Wrong path, stop analyzing!");
-                                    Utils.generatePartingLine("!");
-                                    return;
-                                }
+                                Log.logData(analysis_data, Utils.generatePartingLine("!"));
+                                Log.logData(analysis_data, "Special path, the end block contains IfStmt.");
+                                Log.logData(analysis_data, block_ids.toString());
+                                Log.logData(analysis_data, Utils.generatePartingLine("!"));
                             }
                         } catch (ScriptException e) {
                             Utils.generatePartingLine("!");
@@ -704,7 +724,7 @@ public class Tainted {
                 // Get the element's name.
                 String s = isRelatedToElement(ie, valueToLikelyElement_path);
                 if (s != null){
-                    flag_skip &= 0;
+                    flag_skip = 0;
                     String old_element = element;
                     if(old_element != null) { // Have solved one element case.
                         // Store some information before updating the element.
@@ -841,7 +861,9 @@ public class Tainted {
                         continue;
                     }
                     // Treat the tainted value as a whole, ignore the part (ie.e., the attribution) of it.
-                    //Transfer the type of the tainted.
+                    // Transfer the type of the tainted.
+                    // r6 = (java.util.Set) $r10;
+                    // $i2 = $r0.<android.content.pm.parsing.component.ParsedActivity: int order>;
                     List<ValueBox> vbs = as.getUseBoxes();
                     if (ie == null && vbs.size() == 2) {
                         if (!vbs.get(0).getValue().toString().startsWith("(")) {
@@ -879,8 +901,10 @@ public class Tainted {
                     }
                 }
 
-                flag_skip &= 0;
+                flag_skip = 0;
             }
+            //System.out.println("---- block id: " + block_id);
+            //System.out.println("---- flag_skip: " + flag_skip);
             if(flag_skip==1){
                 skip_block_ids.add(block_id);
             }
@@ -937,11 +961,13 @@ public class Tainted {
         }
 
         Block start_block = findStartBlock(cbg, entry_value_copies, flag_case, numericValueToConcreteAssignment, valueToLikelyElement);
-        if(start_block == null){
+        if(start_block == null){ // This method no need to analysis.
+            storeTaintedPointAndCorrespondingElementAndDataStructure(entry, null, null);
+            Log.logData(analysis_data, "This method is not need to analyze.");
             Utils.printPartingLine("!");
             System.out.println("Cannot find the start block.");
             Utils.printPartingLine("!");
-            exit(0);
+            return;
         }
 
         System.out.println("+ Start block id: " + start_block.getIndexInMethod());
@@ -979,10 +1005,13 @@ public class Tainted {
         // Sort the paths base on the paths' length.
         // Analyze the longest path first so that we can get the most skip blocks.
         Collections.sort(Graph.paths, new ListComparator());
-        // If a block is analyzed, untainted, number/case/element/condition/string-insensitive, it can be skipped.
-        List<Integer> skip_block_ids = new ArrayList<>();
+
+        Set<Unit> target_units = new HashSet<>(); // The target units of IfStmt / LookupSwitchStmt
+        // If a block is analyzed, untainted, number/case/element/condition/string-insensitive, abd not the target block, it can be skipped.
+        Set<Integer> skip_block_ids = new HashSet<>();
         List<SootMethod> stored_methods = new ArrayList<>();  // Avoid duplicated recoding, because multiple paths may involve the same methods.
         List<List<Integer>> analyzed_paths = new ArrayList<>(); // Avoid duplicated analysis.
+
 
         //Log data.
         Log.logData(method_data, Utils.generatePartingLine("*"));
@@ -991,6 +1020,8 @@ public class Tainted {
         int path_num = 0;
         while(!Graph.paths.isEmpty()) {
             List<Integer> path = Graph.paths.get(0);
+            //System.out.println(path.toString());
+            //System.out.println(skip_block_ids.toString());
             Graph.paths.remove(0);
             List<Integer> orig_path = Utils.deepCopy(path);
             // Filter the blocks that can be skipped.
@@ -1014,7 +1045,7 @@ public class Tainted {
             Log.logData(analysis_data,  "+ Processed path: " + path.toString());
 
             dataFlowAnalysisForBlocks(cbg.getBlocks(), path, entry, entry_value_copies, flag_case, flag_start,
-                    numericValueToConcreteAssignment, skip_block_ids, stored_methods, valueToLikelyElement);
+                    numericValueToConcreteAssignment, skip_block_ids, stored_methods, target_units, valueToLikelyElement);
 
             // Filter the blocks that can be skipped.
             path.removeAll(skip_block_ids);

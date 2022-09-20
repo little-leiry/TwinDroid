@@ -32,8 +32,8 @@ public class Log {
 
     public static void logBody(Body body){
         SootMethod method = body.getMethod();
-        String subSig = method.getSubSignature();
-        String file_path = "methods/" + subSig.split(" ")[1] + ".txt";
+        int sig = method.getSignature().hashCode();
+        String file_path = "methods/" + method.getName() + sig + ".txt";
         try {
             File file = new File(file_path);
             if(file.exists()) return;
@@ -47,8 +47,8 @@ public class Log {
 
     public static void logCBG(CompleteBlockGraph cbg){
         SootMethod method = cbg.getBody().getMethod();
-        String subSig = method.getSubSignature();
-        String file_path = "methods/block_" + subSig.split(" ")[1] + ".txt";
+        int sig = method.getSignature().hashCode();
+        String file_path = "methods/block_" + method.getName() + sig + ".txt";
         try {
             File file = new File(file_path);
             if(file.exists()) return;

@@ -25,7 +25,7 @@ public class framework {
     public static void main(String[] args) throws IOException, InterruptedException {
         sootInitial(path);
         Utils.initializeAbstractClassesInfo();
-        test();
+        test3();
         /*ElementInfo test = new ElementInfo();
         test6(test);
         System.out.println(test.getCaseNum());
@@ -187,7 +187,7 @@ public class framework {
 
             /*Log.analysis_pw.close();
             Log.generatePrinterWriter(Tainted.analysis_data);*/
-            Utils.pause();
+            //Utils.pause();
         }
 
         for(Map.Entry<String, Set<Value>> entry: Tainted.associatedElementToDataStructures.entrySet()){
@@ -236,9 +236,9 @@ public class framework {
         String methodSig = sigs[1];
         Body body = Utils.getBodyOfMethod(methodSig);
         //Map<Value, String> valueToLikelyElement = new HashMap<>();
-        List<Value> values = new ArrayList<>();
+        /*List<Value> values = new ArrayList<>();
         for(Unit u : body.getUnits()){
-            /*if(u instanceof IdentityStmt){
+            *//*if(u instanceof IdentityStmt){
                 Value v = ((IdentityStmt) u).getLeftOp();
                 values.add(v);
             }
@@ -246,12 +246,12 @@ public class framework {
                 AssignStmt as = (AssignStmt) u;
                 if(Utils.isCopyOfValues(as, values)){
                     System.out.println(u);
-                }*/
-                /*InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                }*//*
+                *//*InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
                 if(ie!=null && ie.getMethod().getName().equals("getResult")){
                     System.out.println(as.getUseBoxes());
                     break;
-                }*/
+                }*//*
                 //Tainted.storeValueAndCorrespondingLikelyElement(as, valueToLikelyElement);
             if(u instanceof IfStmt){
             IfStmt is = (IfStmt) u;
@@ -261,11 +261,11 @@ public class framework {
                 System.out.println(is.getUseBoxes());
                 System.out.println();
             }
-        }
-        /*Log.logBody(body);
+        }*/
+        Log.logBody(body);
         //System.out.println(body);
         CompleteBlockGraph tug = new CompleteBlockGraph(body);
-        Log.logCBG(tug);*/
+        Log.logCBG(tug);
         /*for(Block b : tug.getBlocks()){
             tug.getExceptionalPredsOf(b);
         }*/
