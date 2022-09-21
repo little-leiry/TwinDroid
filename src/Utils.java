@@ -87,6 +87,7 @@ public class Utils {
         Value parameter = null;
         if(method.isConcrete()){
             Body body = method.retrieveActiveBody();
+            Log.logBody(body);
             for(Unit unit:body.getUnits()){
                 if(unit instanceof IdentityStmt){
                     IdentityStmt is = (IdentityStmt) unit;
@@ -96,6 +97,12 @@ public class Utils {
                     }
                 }
             }
+        } else if(method.isNative()){
+            Utils.printPartingLine("+");
+            System.out.println("Native method.");
+        } else if(method.isPhantom()){
+            Utils.printPartingLine("+");
+            System.out.println("Phantom method");
         }
         return parameter;
     }
@@ -171,12 +178,9 @@ public class Utils {
         return list;
     }
 
-    public static boolean areRelatedNames(String element_name, String method_name){
-        if(element_name.contains("-")){
-            element_name = element_name.replace("-","");
-        }
+    public static boolean areRelatedNames(String name, String method_name){
         method_name = method_name.toLowerCase();
-        return method_name.contains(element_name);
+        return method_name.contains(name);
     }
 
     public static boolean isNumeric(String s){
@@ -239,8 +243,8 @@ public class Utils {
         }
         //System.out.println(ifi);
         //System.out.println("--- abstract class: " + abstract_cls);
-        Log.logData(Tainted.analysis_data, "+ " + ifi);
-        Log.logData(Tainted.analysis_data, "--- abstract class: " + abstract_cls);
+        Log.logData(Log.analysis_data, "+ " + ifi);
+        Log.logData(Log.analysis_data, "--- abstract class: " + abstract_cls);
         // Get the corresponding implemented classes.
         Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
         if(implemented_classes == null){
@@ -260,7 +264,7 @@ public class Utils {
                 if(method.isConcrete()){
                     if(method.getSubSignature().equals(abstract_method.getSubSignature())){
                         //System.out.println("--- abstract method: " + abstract_method.getSignature());
-                        Log.logData(Tainted.analysis_data, "--- abstract method: " + abstract_method.getSignature());
+                        Log.logData(Log.analysis_data, "--- abstract method: " + abstract_method.getSignature());
                         if(method.getDeclaration().contains(" volatile ")) { // The return types of the abstract method and its implemented method are different.
                             Body body = method.retrieveActiveBody();
                             for (Unit unit : body.getUnits()) {
@@ -270,14 +274,14 @@ public class Utils {
                                     if(implemented_method.getName().equals(abstract_method.getName()) &&
                                             implemented_method.getParameterTypes().equals(abstract_method.getParameterTypes())) { // The actually implemented method.
                                         //System.out.println("--- implemented method: " + implemented_method.getSignature());
-                                        Log.logData(Tainted.analysis_data, "--- implemented method: " + implemented_method.getSignature());
+                                        Log.logData(Log.analysis_data, "--- implemented method: " + implemented_method.getSignature());
                                         return implemented_method;
                                     }
                                 }
                             }
                         }
                         //System.out.println("--- implemented method: " + method.getSignature());
-                        Log.logData(Tainted.analysis_data, "--- implemented method: " + method.getSignature());
+                        Log.logData(Log.analysis_data, "--- implemented method: " + method.getSignature());
                         return method;
                     }
                 }

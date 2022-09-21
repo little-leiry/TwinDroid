@@ -9,9 +9,13 @@ import java.util.List;
 public class Log {
     public static PrintWriter analysis_pw;
 
-    static {
+    public static final String element_data = "logs/element_data.txt";
+    public static final String method_data = "logs/method_data.txt";
 
-    }
+    public static final String analysis_data = "logs/analysis_data.txt";
+
+    public static final String methods = "logs/ies.txt";
+
 
     public static void logData(String file_path, String data){
         try {
