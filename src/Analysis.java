@@ -417,15 +417,30 @@ public class Analysis {
                             Unit default_unit = lss.getDefaultTarget();
                             if (default_unit instanceof GotoStmt) {
                                 GotoStmt gs = (GotoStmt) default_unit;
-                                if (gs.getTarget() instanceof AssignStmt) {
-                                    AssignStmt as = (AssignStmt) gs.getTarget();
+                                Unit target_unit = gs.getTarget();
+                                if (target_unit instanceof AssignStmt) {
+                                    AssignStmt as = (AssignStmt) target_unit;
                                     case_value = as.getLeftOp();
                                     continue;
+                                } else if(target_unit instanceof LookupSwitchStmt){
+                                    LookupSwitchStmt lss_target = (LookupSwitchStmt) target_unit;
+                                    case_value = lss_target.getKey();
+                                    continue;
+                                }  else {
+                                    Utils.printPartingLine("!");
+                                    System.out.println("Special default target's target: " + target_unit);
+                                    Utils.printPartingLine("!");
+                                    exit(0);
                                 }
+                            } else {
+                                Utils.printPartingLine("!");
+                                System.out.println("Special default target (not GotoStmt): " + default_unit);
+                                Utils.printPartingLine("!");
+                                exit(0);
                             }
                         }
                         // Filter wrong paths.
-                        if (case_value != null && lss.getUseBoxes().get(0).getValue().equals(case_value)) {
+                        if (case_value != null && lss.getKey().equals(case_value)) {
                             target_units.addAll(Utils.deepCopy(lss.getTargets()));
                             target_units.add(lss.getDefaultTarget());
                             String case_id = numericValueToConcreteAssignment_path.get(case_value); // Find the case id associated with this path.
@@ -442,8 +457,8 @@ public class Analysis {
                                         Unit next_block_head = blocks.get(block_ids.get(i + 1)).getHead();
                                         Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
                                         Log.logData(Log.analysis_data, "Case value: " + case_value + " => " + case_id);
-                                        Log.logData(Log.analysis_data, "Target unit: " + target_unit);
-                                        Log.logData(Log.analysis_data, "Next block head: " + next_block_head);
+                                        Log.logData(Log.analysis_data, "Target unit (hash code): " + target_unit.hashCode());
+                                        Log.logData(Log.analysis_data, "Next block head (hash code): " + next_block_head.hashCode());
                                         Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
                                         // If the next block's first Unit is not the target Unit, this path is incorrect.
                                         if (!next_block_head.equals(target_unit)) {
@@ -567,7 +582,7 @@ public class Analysis {
                     } else if (Utils.isRightValueOfAssignStmt(as, tainted_value)) {
                         need_analysis = 1;
                     }
-                    // This entry / tainted value has been re-defined.
+                    /*// This entry / tainted value has been re-defined.
                     if (need_analysis == 0) {
                         int index = Utils.hasLeftValueOfAssignStmt(as, entry_value_copies);
                         if (index!=-1) {
@@ -591,7 +606,7 @@ public class Analysis {
                             storeAssociatedElementAndCorrespondingDataStructure(entry_method, entry_parents, associated_element, data_structure);
                             pass_tainted_value = 1;
                         }
-                    }
+                    }*/
                     // This statement is likely related to an element.
                     flag_skip &= storeValueAndCorrespondingLikelyElement(as, valueToLikelyElement_path);
                     if(flag_case == 1) {
@@ -643,7 +658,7 @@ public class Analysis {
                     Log.logData(Log.methods, Utils.generatePartingLine("="));
                     Log.logData(Log.methods, "+" + ie.toString());
                 }
-                Log.logData(Log.analysis_data, Utils.generatePartingLine("*"));
+                Log.logData(Log.analysis_data, Utils.generatePartingLine("="));
                 Log.logData(Log.analysis_data, "+ Unit: " + unit);
 
                 if (flag_entry == 1) {
@@ -765,24 +780,16 @@ public class Analysis {
                     // Transfer the type of the tainted -- r6 = (java.util.Set) $r10;
                     // Assign the value to a filed --
                     // r0.<android.content.pm.parsing.ParsingPackageImpl: java.util.List permissions> = $r2;
-                    // r0 := @this: android.content.pm.parsing.ParsingPackageImpl;
                     List<ValueBox> vbs = as.getUseBoxes();
                     if (ie == null && vbs.size() == 2) {
                         Value v0 = vbs.get(0).getValue();
-                        if(as.getLeftOp().toString().contains(".<")){
-                            Unit this_unit;
-                            try{
-                                this_unit = entry_method.retrieveActiveBody().getThisUnit();
-                            } catch (Exception e){
-                                this_unit = null;
-                            }
-                            if(this_unit == null || !v0.equals(((IdentityStmt) this_unit).getLeftOp())){
-                                Log.logData(Log.analysis_data, "--- Pass.");
-                                continue;
-                            }
-                        } else if (!v0.toString().startsWith("(")) { // $i2 = $r0.<android.content.pm.parsing.component.ParsedActivity: int order>;
+                        if(! as.getLeftOp().toString().contains(".<") && !v0.toString().startsWith("(")){
                             Log.logData(Log.analysis_data, "--- Pass.");
                             continue;
+                        } else if (as.getLeftOp().toString().contains(".<")){
+                            Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
+                            Log.logData(Log.analysis_data, "Assign to a filed? -- " + as);
+                            Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
                         }
                     }
                     // Store some information before updating the tainted value.
@@ -953,7 +960,7 @@ public class Analysis {
                 }
                 continue;
             }
-            Log.logData(Log.analysis_data, Utils.generatePartingLine("="));
+            Log.logData(Log.analysis_data, Utils.generatePartingLine("*"));
             Log.logData(Log.analysis_data, "+ Original path: " + orig_path);
             Log.logData(Log.analysis_data,  "+ Processed path: " + path.toString());
 

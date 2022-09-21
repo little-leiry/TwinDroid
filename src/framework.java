@@ -236,22 +236,18 @@ public class framework {
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
-        String methodSig = sigs[0];
+        String methodSig = sigs[4];
         Body body = Utils.getBodyOfMethod(methodSig);
         //System.out.println(body);
         for(Unit unit : body.getUnits()){
-            if(unit instanceof AssignStmt){
-                AssignStmt as = (AssignStmt) unit;
-                if(as.getLeftOp().toString().contains(".<")){
-                    System.out.println(as);
-                }
+            if(unit instanceof LookupSwitchStmt){
+                LookupSwitchStmt lss = (LookupSwitchStmt) unit;
+                System.out.println(lss.getKey());
+                System.out.println(lss.getLookupValues());
             }
+
         }
-        try {
-            body.getThisLocal();
-        } catch (Exception e){
-            System.out.println("NULL");
-        }
+
         //Map<Value, String> valueToLikelyElement = new HashMap<>();
         /*List<Value> values = new ArrayList<>();
         for(Unit u : body.getUnits()){
