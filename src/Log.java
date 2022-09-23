@@ -16,6 +16,9 @@ public class Log {
 
     public static final String methods = "logs/ies.txt";
 
+    public static final String elements = "logs/elements.txt";
+
+
 
     public static void logData(String file_path, String data){
         try {
@@ -31,7 +34,6 @@ public class Log {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     public static void logBody(Body body){
@@ -40,7 +42,7 @@ public class Log {
         String file_path = "methods/" + method.getName() + sig + ".txt";
         try {
             File file = new File(file_path);
-            if(file.exists()) return;
+            if(file.exists()) return; // Have been logged.
             PrintWriter out = new PrintWriter(file_path);
             out.println(body);
             out.close();

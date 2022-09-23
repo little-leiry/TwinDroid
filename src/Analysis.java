@@ -8,7 +8,6 @@ import soot.toolkits.scalar.Pair;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
-import java.sql.SQLOutput;
 import java.util.*;
 
 import static java.lang.System.exit;
@@ -178,7 +177,7 @@ public class Analysis {
         return 1;
     }
 
-    public static String isRelatedToElement(InvokeExpr ie, Map<Value, String> valueToLikelyElement){
+    public static String getRelatedElement(InvokeExpr ie, Map<Value, String> valueToLikelyElement){
         if(ie == null) return null;
 
         String method_name = ie.getMethod().getName();
@@ -207,38 +206,43 @@ public class Analysis {
             AssignStmt as =(AssignStmt) unit;
             InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
             Value base = Utils.getBaseOfInvokeExpr(ie);
-
-            if(entry_value_copies.contains(base)){
-                // Interested unit -- Type transformation of the entry value.
-                if(ie.getMethod().getName().startsWith("to")){
-                    return true;
+            // Interested unit -- the entry value appears in the right of the Assignment unit.
+            if(Utils.hasRightValueOfAssignStmt(as, entry_value_copies)) {
+                // Filter some uninterested types.
+                if(Utils.hasCopyOfValues(as, entry_value_copies)){
+                    return false;
                 }
-                // Interested unit -- Get result from entry value (when the entry value's type is ParseResult).
-                if (base.getType().toString().endsWith("parsing.result.ParseResult")) {
-                    if (ie.getMethod().getName().equals("getResult")) { // ! result.getResult()
-                        return true;
+                if (ie == null && as.getUseBoxes().size() == 2) {
+                    if (! as.getLeftOp().toString().contains(".<") && ! as.getRightOp().toString().startsWith("(")) {
+                        return false;
                     }
                 }
-            }
-            // Interested unit -- Pass in the entry value as a parameter.
-            if(Utils.hasParameterOfInvokeStmt(ie, entry_value_copies) != -1) {
-                String method_name = ie.getMethod().getName();
-                String declaring_class;
-                if (base != null) {
-                    declaring_class = ((RefType) base.getType()).getSootClass().getName();
-                } else {
-                    declaring_class = ie.getMethod().getDeclaringClass().getName();
+                if (entry_value_copies.contains(base)) {
+                    String method_name = ie.getMethod().getName();
+                    if (! method_name.startsWith("to") && ! "intern_charAt_getResult".contains(method_name)) {
+                        return false;
+                    }
                 }
-                if (!SkipInfo.skip_methods.contains(method_name) && !SkipInfo.skip_classes.contains(declaring_class)) { // Filter uninterested methods and classes.
-                    return true;
+                if (Utils.hasParameterOfInvokeStmt(ie, entry_value_copies) != -1) {
+                    String method_name = ie.getMethod().getName();
+                    String declaring_class;
+                    if (base != null) {
+                        declaring_class = ((RefType) base.getType()).getSootClass().getName();
+                    } else {
+                        declaring_class = ie.getMethod().getDeclaringClass().getName();
+                    }
+                    if (SkipInfo.skip_methods.contains(method_name) || SkipInfo.skip_classes.contains(declaring_class)) { // Filter uninterested methods and classes.
+                        return false;
+                    }
                 }
-            }
-            // Interested unit -- Related to elements.
-            if(isRelatedToElement(ie, valueToLikelyElement)!=null){
                 return true;
             }
-        } else if (unit instanceof InvokeExpr) {
-            InvokeExpr ie = (InvokeExpr) unit;
+            // Interested unit -- Related to elements.
+            if (getRelatedElement(ie, valueToLikelyElement) != null) {
+                return true;
+            }
+        } else if (unit instanceof InvokeStmt) {
+            InvokeExpr ie = ((InvokeStmt) unit).getInvokeExpr();
             Value base = Utils.getBaseOfInvokeExpr(ie);
             // Interested unit -- Pass in the entry value as a parameter.
             if(Utils.hasParameterOfInvokeStmt(ie, entry_value_copies) != -1) {
@@ -260,7 +264,7 @@ public class Analysis {
     public static void storeUsefulInfo(AssignStmt as, List<Value> entry_value_copies, int flag_case, Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> valueToLikelyElement){
         if(as==null) return;
 
-        if (Utils.isCopyOfValues(as, entry_value_copies)) {
+        if (Utils.hasCopyOfValues(as, entry_value_copies)) {
             Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
             Log.logData(Log.analysis_data, "--- Copy entry value: " + as);
             Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
@@ -275,7 +279,248 @@ public class Analysis {
         storeValueAndCorrespondingLikelyElement(as, valueToLikelyElement);
     }
 
+    public static Value getCaseValue(LookupSwitchStmt lss){
+        Unit default_unit = lss.getDefaultTarget();
+        if (default_unit instanceof GotoStmt) {
+            GotoStmt gs = (GotoStmt) default_unit;
+            Unit target_unit = gs.getTarget();
+            if (target_unit instanceof AssignStmt) {
+                AssignStmt as = (AssignStmt) target_unit;
+                return as.getLeftOp();
+            } else if(target_unit instanceof LookupSwitchStmt){
+                LookupSwitchStmt lss_target = (LookupSwitchStmt) target_unit;
+                return lss_target.getKey();
+            }  else {
+                Utils.printPartingLine("!");
+                System.out.println("Special default target's target: " + target_unit);
+                Utils.printPartingLine("!");
+                exit(0);
+            }
+        } else {
+            Utils.printPartingLine("!");
+            System.out.println("Special default target (not GotoStmt): " + default_unit);
+            Utils.printPartingLine("!");
+            exit(0);
+        }
+        return null;
+    }
+
+    // Judge whether the condition is met.
+    // Replace the Value with its concrete assignment.
+    // Sort the list according to the Value name's length first in case that one value name is the prefix of another Value name.
+    public static int isConditionMet(IfStmt is, Map<Value, String> numericValueToConcreteAssignment){
+        String condition = is.getCondition().toString();
+        List<ValueBox> vbs = is.getUseBoxes();
+        Collections.sort(vbs, new VBComparator());
+        int flag_compute = 1;
+        for(ValueBox vb : vbs){
+            if( vb instanceof ConditionExprBox) continue;
+            Value v = vb.getValue();
+            if(v instanceof IntConstant) continue;
+            if("int_byte_boolean".contains(vb.getValue().getType().toString())){
+                String assign = numericValueToConcreteAssignment.get(v);
+                if(assign==null) {
+                    flag_compute = 0;
+                    break;
+                } else {
+                    condition = condition.replace(v.toString(), assign);
+                }
+            } else {
+                flag_compute = 0;
+            }
+        }
+        if (flag_compute == 1) {
+            ScriptEngineManager sem = new ScriptEngineManager();
+            ScriptEngine se = sem.getEngineByName("js");
+            try {
+                boolean result = (boolean) se.eval(condition);
+                return result? 1:0;
+            } catch (ScriptException e) {
+                Utils.generatePartingLine("!");
+                System.out.println("Computing Error: " + condition);
+                System.out.println(is);
+                Utils.generatePartingLine("!");
+                throw new RuntimeException(e);
+            }
+        } else { // Cannot compute due to the lack of concrete assignments.
+            return -1;
+        }
+    }
+
+    public static SootClass findCreationOfClassObject(Body body, Value base){
+        Log.logBody(body);
+        if(body == null || base == null) return null;
+
+        for(Unit unit : body.getUnits()){
+            if(unit instanceof AssignStmt){
+                AssignStmt as = (AssignStmt) unit;
+                if(as.getLeftOp().equals(base)){ // The definition of the base value.
+                    if(Utils.isNewStmt(as)){ // The creation of the Object corresponding to the base value.
+                        return ((RefType) as.getLeftOp().getType()).getSootClass();
+                    } else if (as.getUseBoxes().size() == 1){ // r1 = r2;
+                        base = as.getRightOp();
+                        return findCreationOfClassObject(body, base);
+                    } else {
+                        InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                        if(ie!=null) {
+                            SootMethod method = ie.getMethod();
+                            if (method.isConcrete()) {
+                                body = method.retrieveActiveBody();
+                                base = Utils.getReturnValue(body);
+                                return findCreationOfClassObject(body, base);
+                            }
+                        }
+                        return null;
+                    }
+                }
+            }
+        }
+        return  null;
+    }
+
+    public static SootMethod getImplementedMethodOfAbstractMethod(InterfaceInvokeExpr ifi, Tainted tainted_point){
+        Value base = ifi.getBase();
+        SootMethod abstract_method = ifi.getMethod();
+        SootClass abstract_cls;
+        // Get the abstract class.
+        if(base!=null) {
+            abstract_cls = ((RefType) base.getType()).getSootClass();
+        } else {
+            abstract_cls = abstract_method.getDeclaringClass();
+        }
+
+        Log.logData(Log.analysis_data, "+ " + ifi);
+        Log.logData(Log.analysis_data, "--- abstract class: " + abstract_cls);
+        // Get the corresponding implemented classes.
+        Set<SootClass> implemented_classes = Utils.abstractClassToImplementedClasses.get(abstract_cls);
+        if(implemented_classes == null || implemented_classes.isEmpty()){
+            Utils.printPartingLine("!");
+            System.out.println("Special abstract class. Cannot find the implemented class of " + abstract_cls.getName());
+            Utils.printPartingLine("!");
+            return null;
+        }
+
+        SootClass implemented_cls = null;
+        if(implemented_classes.size() == 1){
+            implemented_cls = implemented_classes.iterator().next();
+        } else {
+            Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
+            Log.logData(Log.analysis_data, "Multiple implemented classes, try to confirm the concrete one ... ");
+            //System.out.println(implemented_classes);
+            int flag_found = 0;
+            if(base!=null){
+                List<SootMethod> path = Utils.deepCopy(tainted_point.getParents());
+                path.add(tainted_point.getMethod());
+                // Find the creation of the base value to confirm the implemented class.
+                for (int i = path.size(); i > 0; i--) {
+                    SootMethod method = path.get(i-1);
+                    int index = Utils.isParameterOfMethod(method, base);
+                    if(index != -1) { // If the base is a parameter of the method, we need analyze its parent.
+                        if (i - 1 > 0) {
+                            // Transform the base value.
+                            Body body = path.get(i - 2).retrieveActiveBody();
+                            for (Unit unit : body.getUnits()) {
+                                InvokeExpr ie = Utils.getInvokeOfUnit(unit);
+                                if (ie != null && ie.getMethod().equals(method)) {
+                                    base = ie.getArg(index);
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        implemented_cls = findCreationOfClassObject(method.retrieveActiveBody(), base);
+                        if (implemented_cls != null) {
+                            flag_found = 1;
+                            Log.logData(Log.analysis_data, "Confirmed!");
+                        }
+                        break;
+                    }
+                }
+            }
+            if(flag_found==0){
+                implemented_cls = implemented_classes.iterator().next();
+                Log.logData(Log.analysis_data, "Cannot confirm (base =  " + base + "), choose the first.");
+            }
+            Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
+        }
+
+        for(SootMethod method : implemented_cls.getMethods()){
+            if(method.isConcrete()){
+                if(method.getSubSignature().equals(abstract_method.getSubSignature())){
+                    //System.out.println("--- abstract method: " + abstract_method.getSignature());
+                    Log.logData(Log.analysis_data, "--- abstract method: " + abstract_method.getSignature());
+                    if(method.getDeclaration().contains(" volatile ")) { // The return types of the abstract method and its implemented method are different.
+                        Body body = method.retrieveActiveBody();
+                        for (Unit unit : body.getUnits()) {
+                            InvokeExpr i = Utils.getInvokeOfUnit(unit);
+                            if (i instanceof VirtualInvokeExpr){
+                                SootMethod implemented_method = i.getMethod();
+                                if(implemented_method.getName().equals(abstract_method.getName()) &&
+                                        implemented_method.getParameterTypes().equals(abstract_method.getParameterTypes())) { // The actually implemented method.
+                                    //System.out.println("--- implemented method: " + implemented_method.getSignature());
+                                    Log.logData(Log.analysis_data, "--- implemented method: " + implemented_method.getSignature());
+                                    return implemented_method;
+                                }
+                            }
+                        }
+                    }
+                    //System.out.println("--- implemented method: " + method.getSignature());
+                    Log.logData(Log.analysis_data, "--- implemented method: " + method.getSignature());
+                    return method;
+                }
+            }
+        }
+
+        Utils.printPartingLine("!");
+        System.out.println("Special abstract method. Cannot find the implemented method of " + abstract_method.getSignature());
+        Utils.printPartingLine("!");
+        return null;
+    }
+
+    public static void transformEntryValue(List<Value> entry_value_copies, Body body){
+        if(entry_value_copies == null || body == null) return;
+
+        if(! entry_value_copies.get(0).getType().toString().equals("android.content.res.XmlResourceParser")){
+            entry_value_copies.clear();
+            return;
+        }
+
+        List<Value> new_entry_values = new ArrayList<>();
+        Value bridge_value = null;
+        for(Unit unit : body.getUnits()){
+            if(unit instanceof AssignStmt){
+                AssignStmt as = (AssignStmt) unit;
+                InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                if(ie!=null && ie.getMethod().getName().equals("obtainAttributes")){
+                    if(Utils.hasParameterOfInvokeStmt(ie, entry_value_copies) != -1){
+                        bridge_value = as.getLeftOp();
+                        continue;
+                    }
+                }
+                Value base = Utils.getBaseOfInvokeExpr(ie);
+                if(bridge_value != null) {
+                    if (base != null && base.equals(bridge_value)) {
+                        Value new_entry_value = as.getLeftOp();
+                        if (!new_entry_values.contains(new_entry_value)) {
+                            new_entry_values.add(new_entry_value);
+                        }
+                    } else if (Utils.isParameterOfInvokeStmt(ie, bridge_value) != -1) {
+                        Value new_entry_value = as.getLeftOp();
+                        if (!new_entry_values.contains(new_entry_value)) {
+                            new_entry_values.add(new_entry_value);
+                        }
+                    }
+                }
+            }
+        }
+
+        entry_value_copies.clear();
+        entry_value_copies.addAll(new_entry_values);
+    }
+
     public static Block findStartBlock(CompleteBlockGraph cbg, List<Value> entry_value_copies, int flag_case, Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> valueToLikelyElement){
+        if(cbg==null || entry_value_copies == null) return null;
+
         Block start_block = null;
 
         for(Block block : cbg.getBlocks()){
@@ -414,30 +659,7 @@ public class Analysis {
                         flag_skip = 0;
                         LookupSwitchStmt lss = (LookupSwitchStmt) unit;
                         if (case_value == null) { // Get the bridge case value between two LookupSwitchStmts.
-                            Unit default_unit = lss.getDefaultTarget();
-                            if (default_unit instanceof GotoStmt) {
-                                GotoStmt gs = (GotoStmt) default_unit;
-                                Unit target_unit = gs.getTarget();
-                                if (target_unit instanceof AssignStmt) {
-                                    AssignStmt as = (AssignStmt) target_unit;
-                                    case_value = as.getLeftOp();
-                                    continue;
-                                } else if(target_unit instanceof LookupSwitchStmt){
-                                    LookupSwitchStmt lss_target = (LookupSwitchStmt) target_unit;
-                                    case_value = lss_target.getKey();
-                                    continue;
-                                }  else {
-                                    Utils.printPartingLine("!");
-                                    System.out.println("Special default target's target: " + target_unit);
-                                    Utils.printPartingLine("!");
-                                    exit(0);
-                                }
-                            } else {
-                                Utils.printPartingLine("!");
-                                System.out.println("Special default target (not GotoStmt): " + default_unit);
-                                Utils.printPartingLine("!");
-                                exit(0);
-                            }
+                            case_value = getCaseValue(lss);
                         }
                         // Filter wrong paths.
                         if (case_value != null && lss.getKey().equals(case_value)) {
@@ -499,30 +721,8 @@ public class Analysis {
                 if(unit instanceof IfStmt){
                     flag_skip = 0;
                     IfStmt is = (IfStmt) unit;
-                    // Judge whether the condition is met.
-                    // Replace the Value with its concrete assignment.
-                    // Sort the list according to the Value name's length first in case that one value name is the prefix of another Value name.
-                    String condition = is.getCondition().toString();
-                    List<ValueBox> vbs = is.getUseBoxes();
-                    Collections.sort(vbs, new VBComparator());
-                    int flag_compute = 1;
-                    for(ValueBox vb : vbs){
-                        if( vb instanceof ConditionExprBox) continue;
-                        Value v = vb.getValue();
-                        if(v instanceof IntConstant) continue;
-                        if("int_byte_boolean".contains(vb.getValue().getType().toString())){
-                            String assign = numericValueToConcreteAssignment_path.get(v);
-                            if(assign==null) {
-                                flag_compute = 0;
-                                break;
-                            } else {
-                                condition = condition.replace(v.toString(), assign);
-                            }
-                        } else {
-                            flag_compute = 0;
-                        }
-                    }
-                    if (flag_compute == 1) {
+                    int result = isConditionMet(is, numericValueToConcreteAssignment_path);
+                    if(result != -1 ){
                         Unit target_unit = is.getTarget();
                         if(target_unit==null){
                             Utils.generatePartingLine("!");
@@ -531,41 +731,28 @@ public class Analysis {
                             Utils.generatePartingLine("!");
                             exit(0);
                         }
-                        //System.out.println(is);
-                        //System.out.println(condition);
                         target_units.add(target_unit);
-                        ScriptEngineManager sem = new ScriptEngineManager();
-                        ScriptEngine se = sem.getEngineByName("js");
-                        try {
-                            boolean result = (boolean) se.eval(condition);
-                            if(i + 1 <block_ids.size()) {
-                                if (result) {
-                                    // When the condition is met, if the next block's first Unit is not the target Unit, this path is incorrect.
-                                    if (!blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
-                                        Log.logData(Log.analysis_data, "--- Wrong path, stop analyzing!");
-                                        return;
-                                    }
-                                } else {
-                                    // When the condition is not met, if the next block's first Unit is the target Unit, this path is incorrect.
-                                    if (blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
-                                        Utils.generatePartingLine("!");
-                                        Log.logData(Log.analysis_data, "Wrong path, stop analyzing!");
-                                        Utils.generatePartingLine("!");
-                                        return;
-                                    }
+                        if(i + 1 <block_ids.size()) {
+                            if (result == 1) {
+                                // When the condition is met, if the next block's first Unit is not the target Unit, this path is incorrect.
+                                if (!blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
+                                    Log.logData(Log.analysis_data, "--- Wrong path, stop analyzing!");
+                                    return;
                                 }
                             } else {
-                                Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
-                                Log.logData(Log.analysis_data, "Special path, the end block contains IfStmt.");
-                                Log.logData(Log.analysis_data, block_ids.toString());
-                                Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
+                                // When the condition is not met, if the next block's first Unit is the target Unit, this path is incorrect.
+                                if (blocks.get(block_ids.get(i + 1)).getHead().equals(target_unit)) {
+                                    Utils.generatePartingLine("!");
+                                    Log.logData(Log.analysis_data, "Wrong path, stop analyzing!");
+                                    Utils.generatePartingLine("!");
+                                    return;
+                                }
                             }
-                        } catch (ScriptException e) {
-                            Utils.generatePartingLine("!");
-                            System.out.println("Computing Error: " + condition);
-                            System.out.println(is);
-                            Utils.generatePartingLine("!");
-                            throw new RuntimeException(e);
+                        } else {
+                            Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
+                            Log.logData(Log.analysis_data, "Special path, the end block contains IfStmt.");
+                            Log.logData(Log.analysis_data, block_ids.toString());
+                            Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
                         }
                     }
                     continue;
@@ -628,7 +815,7 @@ public class Analysis {
                 }
 
                 // Get the element's name.
-                String s = isRelatedToElement(ie, valueToLikelyElement_path);
+                String s = getRelatedElement(ie, valueToLikelyElement_path);
                 if (s != null){
                     flag_skip = 0;
                     String old_element = element;
@@ -656,7 +843,7 @@ public class Analysis {
 
                 if(ie!=null){
                     Log.logData(Log.methods, Utils.generatePartingLine("="));
-                    Log.logData(Log.methods, "+" + ie.toString());
+                    Log.logData(Log.methods, ie.toString());
                 }
                 Log.logData(Log.analysis_data, Utils.generatePartingLine("="));
                 Log.logData(Log.analysis_data, "+ Unit: " + unit);
@@ -682,7 +869,7 @@ public class Analysis {
                                 pass_tainted_value = 1;
                             }
                         } else {
-                            if (!callee_name.startsWith("to")) { // ! tainted_value.toBundle()
+                            if (!callee_name.startsWith("to") && ! "intern_charAt".contains(callee_name)) { // Not the type transformation of the value.
                                 Log.logData(Log.analysis_data, "--- Pass.");
                                 continue;
                             }
@@ -700,16 +887,23 @@ public class Analysis {
                     //Utils.printPartingLine("-");
                     Log.logData(Log.analysis_data, "--- Tainted callee.");
                     //Utils.printPartingLine("-");
+                    if(callee.isConstructor()){
+                        if(base != null){
+                            tainted_value = base;
+                            Log.logData(Log.analysis_data, "--- Update the tainted value: " + tainted_value);
+                            continue;
+                        }
+                    }
                     if (callee_name.equals("add") || callee_name.equals("put")) { // xxx.add(tainted_value)
                         if (base != null) {
                             tainted_value = base;
-                            Log.logData(Log.analysis_data, "--- Update tainted value: " + tainted_value);
+                            Log.logData(Log.analysis_data, "--- Update the tainted value: " + tainted_value);
                             continue;
                         }
                     }
                     if(callee_name.equals("arraycopy")){
                         tainted_value = ie.getArg(2);
-                        Log.logData(Log.analysis_data, "--- Update tainted value: " + tainted_value);
+                        Log.logData(Log.analysis_data, "--- Update the tainted value: " + tainted_value);
                         continue;
                     }
                     if (base != null) {
@@ -727,7 +921,8 @@ public class Analysis {
                             continue;
                         }
                     }
-                    if (callee_name.startsWith("is") || callee_name.startsWith("get")) {
+                    if (callee_name.startsWith("is") || callee_name.startsWith("get") ||
+                            callee_name.startsWith("check") || callee_name.startsWith("remove")) {
                         Log.logData(Log.analysis_data, "--- Pass.");
                         continue;
                     }
@@ -735,7 +930,7 @@ public class Analysis {
                         if (ie instanceof InterfaceInvokeExpr) { // Invoke an abstract method, try to get its body.
                             Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
                             InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) ie;
-                            callee = Utils.getImplementedMethodOfAbstractMethod(ifi);
+                            callee = getImplementedMethodOfAbstractMethod(ifi, entry);
                             Log.logData(Log.analysis_data,Utils.generatePartingLine("+"));
                         }
                         Value parameter = Utils.getParameter(callee, parameter_index);
@@ -768,7 +963,7 @@ public class Analysis {
                 if (assignStmt == 1) {
                     AssignStmt as = (AssignStmt) unit;
                     // There is a copy of entry value.
-                    if(Utils.isCopyOfValues(as, entry_value_copies)){
+                    if(Utils.hasCopyOfValues(as, entry_value_copies)){
                         Log.logData(Log.analysis_data, "--- Copy the entry value.");
                         Value copy = as.getLeftOp();
                         if(!entry_value_copies.contains(copy)) {
@@ -780,10 +975,8 @@ public class Analysis {
                     // Transfer the type of the tainted -- r6 = (java.util.Set) $r10;
                     // Assign the value to a filed --
                     // r0.<android.content.pm.parsing.ParsingPackageImpl: java.util.List permissions> = $r2;
-                    List<ValueBox> vbs = as.getUseBoxes();
-                    if (ie == null && vbs.size() == 2) {
-                        Value v0 = vbs.get(0).getValue();
-                        if(! as.getLeftOp().toString().contains(".<") && !v0.toString().startsWith("(")){
+                    if (ie == null && as.getUseBoxes().size() == 2) {
+                        if(! as.getLeftOp().toString().contains(".<") && !as.getRightOp().toString().startsWith("(")){
                             Log.logData(Log.analysis_data, "--- Pass.");
                             continue;
                         } else if (as.getLeftOp().toString().contains(".<")){
@@ -812,7 +1005,10 @@ public class Analysis {
                         }
                     }
                     if (pass_tainted_value == 1) {
-                        tainted_value = ((AssignStmt) unit).getLeftOp();
+                        tainted_value = as.getLeftOp();
+                        if(tainted_value.toString().contains("[")){ // r7[$i1] = $b6
+                            tainted_value = tainted_value.getUseBoxes().get(0).getValue();
+                        }
                         Log.logData(Log.analysis_data, "--- Update the tainted value: " + tainted_value);
                         if (tainted_value.getType().toString().endsWith("parsing.result.ParseResult")) {
                             pass_tainted_value = 0; // Only result.getResult can be passed, when the tainted value is the type of ParseResult.
@@ -880,14 +1076,25 @@ public class Analysis {
         }
 
         Block start_block = findStartBlock(cbg, entry_value_copies, flag_case, numericValueToConcreteAssignment, valueToLikelyElement);
-        if(start_block == null){ // This method no needs to analysis.
-            entry.storeElementAndCorrespondingStructure(null, null);
-            entry.storeTaintedChildren(null);
-            Log.logData(Log.analysis_data, "This method is not need to analyze.");
-            Utils.printPartingLine("!");
-            System.out.println("Cannot find the start block.");
-            Utils.printPartingLine("!");
-            return;
+        if(start_block == null){
+            // These methods are not fit the general resolving method.
+            // We need transform the entry value.
+            System.out.println("Transform the entry value...");
+            transformEntryValue(entry_value_copies, body);
+            Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
+            Log.logData(Log.analysis_data, "Transfer the entry value :" + entry_value_copies);
+            Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
+            // Find the start block again.
+            start_block = findStartBlock(cbg, entry_value_copies, flag_case, numericValueToConcreteAssignment, valueToLikelyElement);
+            if(start_block == null) { // This method no needs to analysis.
+                entry.storeElementAndCorrespondingStructure(null, null);
+                entry.storeTaintedChildren(null);
+                Log.logData(Log.analysis_data, "This method does not need to be analyzed.");
+                Utils.printPartingLine("!");
+                System.out.println("Cannot find the start block.");
+                Utils.printPartingLine("!");
+                return;
+            }
         }
 
         System.out.println("+ Start block id: " + start_block.getIndexInMethod());
@@ -948,14 +1155,14 @@ public class Analysis {
             path.removeAll(skip_block_ids);
             if(path.isEmpty()){
                 path_num+=1;
-                if(path_num == total_num) {
+                if(path_num == total_num || path_num % 1000 == 0) {
                     System.out.println("Analyzed path num: " + path_num);
                 }
                 continue;
             }
             if(analyzed_paths.contains(path)){
                 path_num+=1;
-                if(path_num == total_num) {
+                if(path_num == total_num || path_num % 1000 == 0) {
                     System.out.println("Analyzed path num: " + path_num);
                 }
                 continue;
@@ -972,7 +1179,7 @@ public class Analysis {
             analyzed_paths.add(path);
 
             path_num+=1;
-            if(path_num == total_num) {
+            if(path_num == total_num || path_num % 1000 == 0) {
                 System.out.println("Analyzed path num: " + path_num);
             }
            /* Log.analysis_pw.close();

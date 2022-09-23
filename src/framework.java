@@ -119,9 +119,9 @@ public class framework {
         Log.generatePrinterWriter(Log.analysis_data);
 
         String[] skip_nms = {"\"android\""};
-        String[] skip_mds = {"obtainAttributes", "skipCurrentTag", "append", "unknownTag"};
-        String[] no_analysis_mds = {"max", "min", "create"};
-        String[] skip_cls = {"android.content.res.XmlResourceParser", "android.content.pm.parsing.result.ParseInput"};
+        String[] skip_mds = {"obtainAttributes", "skipCurrentTag", "append", "unknownTag", "contains", "equals"};
+        String[] no_analysis_mds = {"max", "min", "create", "digit", "composeLongVersionCode"};
+        String[] skip_cls = {"android.content.res.XmlResourceParser", "android.content.pm.parsing.result.ParseInput", "com.android.internal.util.AnnotationValidations", "android.util.Slog"};
         String[] no_analysis_cls = {"com.android.internal.util.CollectionUtils", "android.text.TextUtils", "com.android.internal.util.ArrayUtils"};
         SkipInfo.skip_names.addAll(new ArrayList<>(Arrays.asList(skip_nms)));
         SkipInfo.skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
@@ -180,26 +180,31 @@ public class framework {
             if(flag_analyzed==1) continue;
 
             analyzed_tainted_points.add(tainted_point);
-
             Analysis.dataFlowAnalysisForMethod(tainted_point);
 
-            //System.out.println(Tainted.tainted_points.size());
-
-            /*Log.analysis_pw.close();
-            Log.generatePrinterWriter(Tainted.analysis_data);*/
             //Utils.pause();
         }
 
         for(Map.Entry<String, Set<Value>> entry: Analysis.associatedElementToDataStructures.entrySet()){
             System.out.println(entry.getKey() + " => " + entry.getValue().toString());
+            String s = entry.getKey() + " => ";
+            for(Value v : entry.getValue()){
+                if(v.toString().contains(".<")){
+                    s += v.toString();
+                } else {
+                    s += v.getType().toString();
+                }
+            }
+            Log.logData(Log.elements, "=");
+            Log.logData(Log.elements, s);
         }
     }
 
     // print body
     // given class name and method name
     public static void test2() {
-        String className = "android.content.res.XmlBlock$Parser";
-        String methodName = "getName";
+        String className = "android.content.IntentFilter$$ExternalSyntheticLambda0";
+        String methodName = "accept";
         //String className = "android.content.pm.parsing.component.ParsedPermission";
         //String className = "android.content.pm.parsing.result.ParseResult";
         SootClass cls = Scene.v().getSootClassUnsafe(className);
@@ -207,15 +212,13 @@ public class framework {
         //String methodName = "addIntent";
         List<Body> bodies = Utils.getBodyOfMethod(className, methodName);
         for (Body body : bodies) {
-            System.out.println(body);
-            //CompleteBlockGraph tug = new CompleteBlockGraph(body);
-            //System.out.println(tug);
-           /* for(Unit unit : body.getUnits()){
-                if(unit instanceof AssignStmt){
-                    AssignStmt as = (AssignStmt) unit;
-                    System.out.println(as.getDefBoxes());
+            //System.out.println(body);
+            for(Unit u : body.getUnits()){
+                InvokeExpr ie = Utils.getInvokeOfUnit(u);
+                if(ie!=null){
+                    System.out.println(ie.getMethod().retrieveActiveBody());
                 }
-            }*/
+            }
         }
     }
 
@@ -223,6 +226,14 @@ public class framework {
     // given method signature
     private static void test3() {
         String[] sigs = {
+                "<android.content.pm.parsing.component.ParsedIntentInfoUtils: android.content.pm.parsing.result.ParseResult parseData(android.content.pm.parsing.component.ParsedIntentInfo,android.content.res.Resources,android.content.res.XmlResourceParser,boolean,android.content.pm.parsing.result.ParseInput)>",
+                "<android.content.IntentFilter: void addDataType(java.lang.String)>",
+                "<android.content.IntentFilter: void processMimeType(java.lang.String,java.util.function.BiConsumer)>",
+                "<android.content.pm.parsing.component.ParsedProviderUtils: android.content.pm.parsing.result.ParseResult parseGrantUriPermission(android.content.pm.parsing.component.ParsedProvider,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
+                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl setMetaData(android.os.Bundle)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseRestrictUpdateHash(int,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
+                "<android.content.pm.parsing.component.ParsedProviderUtils: android.content.pm.parsing.result.ParseResult parseGrantUriPermission(android.content.pm.parsing.component.ParsedProvider,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
+                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl setMetaData(android.os.Bundle)>",
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseUsesStaticLibrary(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addUsesStaticLibraryCertDigests(java.lang.String[])>",
                 "<java.lang.System: void arraycopy(java.lang.Object,int,java.lang.Object,int,int)>",
@@ -236,321 +247,40 @@ public class framework {
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
-        String methodSig = sigs[4];
+        String methodSig = sigs[14];
         Body body = Utils.getBodyOfMethod(methodSig);
-        //System.out.println(body);
+        /*CompleteBlockGraph cbg = new CompleteBlockGraph(body);
+        Graph.generatePathsFromBlock(cbg.getHeads().get(0));
+        System.out.println(Graph.paths.size());*/
+        Value base = null;
+        SootMethod m1 = null;
+        SootMethod m2 = null;
         for(Unit unit : body.getUnits()){
-            if(unit instanceof LookupSwitchStmt){
-                LookupSwitchStmt lss = (LookupSwitchStmt) unit;
-                System.out.println(lss.getKey());
-                System.out.println(lss.getLookupValues());
-            }
-
-        }
-
-        //Map<Value, String> valueToLikelyElement = new HashMap<>();
-        /*List<Value> values = new ArrayList<>();
-        for(Unit u : body.getUnits()){
-            *//*if(u instanceof IdentityStmt){
-                Value v = ((IdentityStmt) u).getLeftOp();
-                values.add(v);
-            }
-            if(u instanceof AssignStmt){
-                AssignStmt as = (AssignStmt) u;
-                if(Utils.isCopyOfValues(as, values)){
-                    System.out.println(u);
-                }*//*
-                *//*InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
-                if(ie!=null && ie.getMethod().getName().equals("getResult")){
-                    System.out.println(as.getUseBoxes());
-                    break;
-                }*//*
-                //Tainted.storeValueAndCorrespondingLikelyElement(as, valueToLikelyElement);
-            if(u instanceof IfStmt){
-            IfStmt is = (IfStmt) u;
-                System.out.println(u);
-                System.out.println(is.getConditionBox());
-                System.out.println(is.getTarget());
-                System.out.println(is.getUseBoxes());
-                System.out.println();
-            }
-        }*/
-        /*Log.logBody(body);
-        Value p = Utils.getParameter(body.getMethod(), 0);
-        System.out.println(p);*/
-        //System.out.println(body);
-        //CompleteBlockGraph tug = new CompleteBlockGraph(body);
-        //Log.logCBG(tug);
-        /*for(Block b : tug.getBlocks()){
-            tug.getExceptionalPredsOf(b);
-        }*/
-        /*System.out.println(tug.getHeads().size());
-        Block start_block = null;
-        for(Block b : tug.getBlocks()){
-            for(Unit u : b){
-                if(u instanceof LookupSwitchStmt){
-                 start_block = b;
-                 break;
+            /*if(unit instanceof IdentityStmt){
+                System.out.println(unit);
+                IdentityStmt is = (IdentityStmt) unit;
+                String s = is.getRightOp().toString();
+                if(s.contains("@parameter")) {
+                    int index = s.indexOf("@parameter");
+                    System.out.println(s.charAt(index + 10));
                 }
-            }
-            if(start_block!=null) break;
-        }
-        System.out.println(start_block.getIndexInMethod());
-        Graph.generatePathsFromBlock(start_block);*/
-        //List<Block> blocks  = tug.getHeads();
-       // System.out.println(blocks.size());
-
-        /*for(Block b : tug.getBlocks()){
-            //System.out.println("---: " + b.getIndexInMethod());
-            for(Unit u : b){
-                //System.out.println(u);
-                if(u instanceof LookupSwitchStmt){
-                    //System.out.println(u);
-                    System.out.println("--- " + b.getIndexInMethod());
-                    System.out.println("--- " + b.getHead());
-                    LookupSwitchStmt lss = (LookupSwitchStmt) u;
-                    if(lss.getDefaultTarget() instanceof GotoStmt){
-                        GotoStmt gs = (GotoStmt) lss.getDefaultTarget();
-                        System.out.println(gs.getTarget());
-                        if(gs.getTarget() instanceof AssignStmt){
-                            AssignStmt as = (AssignStmt) gs.getTarget();
-                            System.out.println(as.getLeftOp());
-                        }
-                    }
-                    System.out.println(lss.getTargets());
-
-                }
-            }
-            //Utils.pause();
-        }*/
-        /*for(List<Integer> call_path : Graph.call_paths){
-            System.out.println(call_path);
-        }*/
-        /*Utils.printPartingLine("-");
-        Collections.sort(Graph.call_paths, new ListComparator());
-        for(List<Integer> call_path : Graph.call_paths){
-            System.out.println(call_path);
-        }*/
-        //System.out.println(tug);
-        /*List<Value> vs = new ArrayList<>();
-        for(Unit unit:body.getUnits()){
-            if(unit instanceof AssignStmt) {
-                AssignStmt as = (AssignStmt) unit;
-                InvokeExpr i = Utils.getInvokeOfAssignStmt(as);
-                if(i!=null && i.getMethod().getName().equals("parseProvider")){
-                    List<ValueBox> vbs = as.getUseBoxes();
-                    System.out.println(vbs);
-                    Collections.sort(vbs, new VBComparator());
-                    System.out.println(vbs);
-                    System.out.println(body.getUnits().getSuccOf(unit));
-                }
-            }
-        }*/
-        //System.out.println(body);
-       // String methodSig = ;
-        //String methodSig3 = ;
-        //String methodSig = "";
-        //SootMethod sm = Scene.v().getMethod(methodSig);
-        //SootMethod sm2 = Scene.v().getMethod(methodSig2);
-        //SootMethod sm3 = Scene.v().getMethod(methodSig3);
-        /*List<SootMethod> parents = new ArrayList<>();
-        parents.add(sm2);
-        Tainted t = new Tainted(sm, null, "test1", parents);
-        List<SootMethod> p = Utils.deepCopy(t.getParents());
-        p.add(sm3);
-        Tainted t2 = new Tainted(sm2, null, "test2", p);
-        System.out.println(t.getParents());
-        System.out.println(t2.getParents());*/
-       /* Tainted t = new Tainted(sm, null, null, null);
-        System.out.println(t.getParents());
-        System.out.println(t.getElement());
-        System.out.println(t.getStartUnit());*/
-        //System.out.println(sm.getSubSignature());
-        //Integer index = 1;
-        //System.out.println(Utility.transfer(sm, index));
-
-        //List<Unit> b = Utility.bodyToList(body);
-        /*for(Unit u : b){
-            System.out.println(u);
-        }*/
-        /*for(Unit unit : body.getUnits()){
+            }*/
             if(unit instanceof AssignStmt){
                 AssignStmt as = (AssignStmt) unit;
-                System.out.println("==================: " +as);
-                System.out.println(as.getUseBoxes());
-                if(!as.containsInvokeExpr()){
-                    if(as.getUseBoxes().size()==2){
-                        if(as.getUseBoxes().get(0).toString().contains(".<")) continue;
-                        System.out.println("------------------: " + as);
-                    }
-                }
-            }
-            if(unit instanceof IdentityStmt){
-                IdentityStmt is = (IdentityStmt) unit;
-                System.out.println("++++++++++++++++++++: " + is);
-                System.out.println(is.getRightOp());
-            }
-            InvokeExpr i = Utility.getInvokeOfUnit(unit);
-            if(i!=null){
-                if(i instanceof InterfaceInvokeExpr){
-                    InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) i;
-                    SootMethod s = ifi.getMethod();
-                    //System.out.println(ifi);
-                    SootClass cls =((RefType) ifi.getBase().getType()).getSootClass();
-                    //System.out.println("----: " + cls);
-                    //System.out.println(s);
-                    if(s.getName().equals("addPermission")){
-                        Utility.printSymbols("-");
-                        Body b = Utility.getImplementedMethodOfAbstractMethod(ifi).retrieveActiveBody();
-                        System.out.println(b);
-                        Utility.printSymbols("-");
-                    }
-                }
-            }
-        }*/
-        //System.out.println(body);
-       /* Map<String, String> caseIdToElement = new HashMap<String, String>();
-        Map<String, Unit> elementToUnit = new HashMap<String, Unit>();
-        Map<String, SootMethod> elementToMethod = new HashMap<String, SootMethod>();
-        Map<Value, String> likely_elements = new HashMap<Value, String>();
-        Map<Value, String> numericValueToConcreteValue = new HashMap<Value, String>();
-        int flag = 0;
-        int count = 0;
-        int case_num = 0;
-        String element = "NULL";
-        Value case_value = null;
-        List<Unit> units = Utils.bodyToList(body);
-        for(Unit unit : body.getUnits()) {
-            if (unit instanceof AssignStmt) {
-                AssignStmt as = (AssignStmt) unit;
-                constructNumericValueToConcreteValue(as, numericValueToConcreteValue);
-                createOrUpdateValueToLikelyElement(as, likely_elements);
-            }
-            int flag_element_cases = 0;
-            // switch(element): case(XXX)=>parseXXX(parser)
-            // LookupSwitchStmt($i1){case -12356 goto z0 = equals(XXX), b2 = 0}
-            // LookupSwitchStmt(b2){case 0 goto $r6 = parseXXX(parser)}
-            if (unit instanceof LookupSwitchStmt) {
-                LookupSwitchStmt lss = (LookupSwitchStmt) unit;
-                if (case_value != null && lss.getUseBoxes().get(0).getValue().equals(case_value)) { // This LookupSwitchStmt is corresponding to the element's LookupSwitchStmt.
-                    flag_element_cases = 1;
-                }
-                //System.out.println(lss.getUseBoxes());
-                //System.out.println(lss.getTargets());
-                for (int num = 0; num < lss.getTargetCount(); num++) {
-                    Unit u = lss.getTarget(num);
-                    if(u instanceof GotoStmt){
-                        GotoStmt gs = (GotoStmt) u;
-                        u = gs.getTarget();
-                    }
-                    InvokeExpr invoke = Utils.getInvokeOfUnit(u);
-                    if (invoke != null) {
-                        if (invoke.getMethod().getName().equals("equals")) { // This LookupSwitchStmt is related to elements.
-                            case_num = lss.getTargetCount(); // The number of elements.
-                            break;
-                        }
-                    }
-                    if (flag_element_cases == 1) {
-                        String case_id = ((Integer) lss.getLookupValue(num)).toString();
-                        if (caseIdToElement.containsKey(case_id)) {
-                            String e = caseIdToElement.get(case_id);
-                            if (invoke != null) {
-                                Utils.generatePartingLine("-");
-                                elementToMethod.put(e, invoke.getMethod());
-                                elementToUnit.put(e, u);
-                                System.out.println(u);
-                                System.out.println(e + " => " + invoke.getMethod().getName());
-                            } else {
-                                Utils.generatePartingLine("!");
-                                System.out.println("Special element cases. The target unit does not contain an InvokeExpr:");
-                                System.out.println(e + " => " + u);
-                                System.out.println(units.indexOf(u));
-                                Utils.generatePartingLine("!");
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (unit instanceof AssignStmt) {
-                AssignStmt as = (AssignStmt) unit;
-                InvokeExpr i = Utils.getInvokeOfAssignStmt(as);
-                if (i != null) {
-                    if (i.getMethod().getName().equals("equals")) {
-                        System.out.println(as);
-                        if (i.getArg(0) instanceof StringConstant) {
-                            element = i.getArg(0).toString();
-                            //System.out.println("=====" + as);
-                            flag = 1;
-                        } else {
-                            Value base = Utils.getBaseOfInvokeExpr(i);
-                            //System.out.println(base);
-                            if (base != null) {
-                                if (likely_elements.containsKey(base)) {
-                                    element = likely_elements.get(base);
-                                    System.out.println(element);
-                                    System.out.println("++++++" + as);
-                                    flag = 1;
-                                } else {
-                                    System.out.println("Non-element-related equals: " + as);
-                                }
-                            }
-                        }
-                    }
-                }
-                //System.out.println(flag);
-            }
-
-            if (flag == 1 && case_num != 0) {
-                count += 1;
-                //System.out.println(count);
-                if (count == 3) {
-                    // Get the mapping relationship of two related LookupSwitchStmts
-                    if (unit instanceof AssignStmt) {
-                        AssignStmt as = (AssignStmt) unit;
-                        System.out.println(as.getLeftOp().getType());
-                        if ("byte_int".contains(as.getLeftOp().getType().toString())) {
-                            if (case_value == null) {
-                                case_value = as.getLeftOp();
-                            }
-                        } else {
-                            System.out.println("Special case: the third unit is not the case id transform.");
-                            System.out.println(as);
-                        }
-                        String case_id = numericValueToConcreteValue.get(as.getLeftOp());
-                        System.out.println(case_id + " => " + element);
-                        caseIdToElement.put(case_id, element);
+                InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                if(ie!=null&&ie.getMethod().getName().equals("isError")){
+                    if(m1==null){
+                        m1 = ie.getMethod();
                     } else {
-                        System.out.println("Special case: " + unit);
-                        List<String> case_ids = Utils.intToList(case_num);
-                        for (String case_id : case_ids) {
-                            if (!caseIdToElement.containsKey(case_id)) {
-                                System.out.println(case_id + " => " + element);
-                                caseIdToElement.put(case_id, element);
-                            }
-                        }
+                        m2 = ie.getMethod();
                     }
-                    element = "NULL";
-                    flag = 0;
-                    count = 0;
                 }
             }
         }
-        System.out.println(flag);
-        System.out.println(count);
-        System.out.println(element);*/
-        /*for(Unit unit: body.getUnits()){
-            System.out.println(unit);
-            //System.out.println(unit instanceof IdentityStmt);
-            if(unit instanceof IdentityStmt){
-                IdentityStmt is = (IdentityStmt) unit;
-                System.out.println(is.getRightOp().toString().contains("@parameter0:"));
-            }
-            for(ValueBox vb : unit.getUseBoxes()){
-                System.out.println(vb.getValue().toString().contains("@parameter"));
-            }
-        }*/
+        System.out.println(m1.equals(m2));
+        //System.out.println(Analysis.findCreationOfClassObject(body, base));
     }
+
 
     private static void test4() {
         SootClass cls = Scene.v().getSootClassUnsafe("android.content.pm.parsing.ParsingPackageUtils");
@@ -638,10 +368,11 @@ public class framework {
         ScriptEngine se = sem.getEngineByName("js");
         se.put("a", a);
         se.put("b", b);
-        Object result = null;
+        boolean result;
         try{
-            result = se.eval(s1);
-            System.out.println(result.getClass().getName());
+            result = (boolean) se.eval(s1);
+            System.out.println(result ? 1:0);
+            //System.out.println(result.getClass().getName());
         } catch (ScriptException e) {
             throw new RuntimeException(e);
         }*/
@@ -678,9 +409,13 @@ public class framework {
             l.remove(0);
         }
 */
-        String s = "copy";
-        System.out.println(s.contains("COPY"));
-
+    Set<String> test = new HashSet<>();
+    test.add("c");
+    test.add("d");
+    test.add("b");
+    test.add("c");
+    test.add("a");
+        System.out.println(test);
     }
     public static void test6(ElementInfo test){
         test.getCaseIdToElement().put("1","test");

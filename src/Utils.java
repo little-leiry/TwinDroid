@@ -145,6 +145,9 @@ public class Utils {
 
     public static int isParameterOfInvokeStmt(InvokeExpr i, Value v) {
         if(i == null || v == null) return -1;
+        if(!v.getUseBoxes().isEmpty()){
+            v = v.getUseBoxes().get(0).getValue();
+        }
         List<Value> parameters = i.getArgs();
         if (parameters.contains(v)) {
             return parameters.indexOf(v);
@@ -231,67 +234,6 @@ public class Utils {
             }
         }
     }
-    public static SootMethod getImplementedMethodOfAbstractMethod(InterfaceInvokeExpr ifi){
-        Value base = ifi.getBase();
-        SootMethod abstract_method = ifi.getMethod();
-        SootClass abstract_cls = null;
-        // Get the abstract class.
-        if(base!=null) {
-            abstract_cls = ((RefType) base.getType()).getSootClass();
-        } else {
-            abstract_cls = abstract_method.getDeclaringClass();
-        }
-        //System.out.println(ifi);
-        //System.out.println("--- abstract class: " + abstract_cls);
-        Log.logData(Log.analysis_data, "+ " + ifi);
-        Log.logData(Log.analysis_data, "--- abstract class: " + abstract_cls);
-        // Get the corresponding implemented classes.
-        Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
-        if(implemented_classes == null){
-            Utils.printPartingLine("!");
-            System.out.println("Special abstract class. Cannot find the implemented class of " + abstract_cls.getName());
-            Utils.printPartingLine("!");
-            return null;
-        }
-        if(implemented_classes.size()>1){
-            Utils.printPartingLine("!");
-            System.out.println("Special abstract classes, more than one implemented classes: " + implemented_classes);
-            Utils.printPartingLine("!");
-        }
-        //Choose the first found implemented method.
-        for(SootClass implemented_cls : implemented_classes){
-            for(SootMethod method : implemented_cls.getMethods()){
-                if(method.isConcrete()){
-                    if(method.getSubSignature().equals(abstract_method.getSubSignature())){
-                        //System.out.println("--- abstract method: " + abstract_method.getSignature());
-                        Log.logData(Log.analysis_data, "--- abstract method: " + abstract_method.getSignature());
-                        if(method.getDeclaration().contains(" volatile ")) { // The return types of the abstract method and its implemented method are different.
-                            Body body = method.retrieveActiveBody();
-                            for (Unit unit : body.getUnits()) {
-                                InvokeExpr i = Utils.getInvokeOfUnit(unit);
-                                if (i instanceof VirtualInvokeExpr){
-                                    SootMethod implemented_method = i.getMethod();
-                                    if(implemented_method.getName().equals(abstract_method.getName()) &&
-                                            implemented_method.getParameterTypes().equals(abstract_method.getParameterTypes())) { // The actually implemented method.
-                                        //System.out.println("--- implemented method: " + implemented_method.getSignature());
-                                        Log.logData(Log.analysis_data, "--- implemented method: " + implemented_method.getSignature());
-                                        return implemented_method;
-                                    }
-                                }
-                            }
-                        }
-                        //System.out.println("--- implemented method: " + method.getSignature());
-                        Log.logData(Log.analysis_data, "--- implemented method: " + method.getSignature());
-                        return method;
-                    }
-                }
-            }
-        }
-        Utils.printPartingLine("!");
-        System.out.println("Special abstract method. Cannot find the implemented method of " + abstract_method.getSignature());
-        Utils.printPartingLine("!");
-        return null;
-    }
 
     public static List<Unit> bodyToList(Body body){
         List<Unit> b = new ArrayList<>();
@@ -355,23 +297,28 @@ public class Utils {
 
     // r7 = r4, r7 = (String) r4
     // r7 is a copy of r4
-    public static boolean isCopyOfValues(AssignStmt as, List<Value> values){
-        if(as==null || values == null) return false;
+    public static boolean isCopyOfValue(AssignStmt as, Value value){
+        if(as==null || value == null) return false;
         InvokeExpr ie = getInvokeOfAssignStmt(as);
         List<ValueBox> vbs = as.getUseBoxes();
-        // There is a copy of entry value.
+        // There is a copy of value.
         if(vbs.size()==1 && ie == null){
             Value use_value = as.getRightOp();
-            if(values.contains(use_value)){
-                return true;
-            }
-        } else if(vbs.size() == 2 && ie == null){
-            if(vbs.get(0).getValue().toString().startsWith("(") && values.contains(vbs.get(1).getValue())){
+            if(value.equals(use_value)){
                 return true;
             }
         }
         return false;
     }
+
+    public static boolean hasCopyOfValues(AssignStmt as, List<Value> values){
+        if(as==null || values == null) return false;
+        for(Value v : values){
+            if(isCopyOfValue(as, v) == true) return true;
+        }
+        return false;
+    }
+
 
     public static void pause(){
         try{
@@ -389,6 +336,51 @@ public class Utils {
         }else{
             return true;
         }
+    }
+
+    public static boolean isNewStmt(AssignStmt as){
+        if(as == null) return false;
+
+        if(as.getUseBoxes().size() == 1 && as.getRightOp().toString().startsWith("new")) {
+            return true;
+        }
+        return false;
+    }
+
+    public static Value getReturnValue(Body body){
+        if(body == null) return null;
+
+        for(Unit unit : body.getUnits()){
+            if(unit instanceof ReturnStmt){
+                return ((ReturnStmt) unit).getOp();
+            }
+        }
+
+        return null;
+    }
+
+    // Judge whether a Value is the parameter of a method;
+    // Return the index of parameter.
+    public static int isParameterOfMethod(SootMethod method, Value value){
+
+        if(method == null || value == null){
+            return -1;
+        }
+
+        Body body = method.retrieveActiveBody();
+        for(Unit unit : body.getUnits()){
+            if(unit instanceof IdentityStmt){
+                IdentityStmt is = (IdentityStmt) unit;
+                if(is.getLeftOp().equals(value)) {
+                    String s = is.getRightOp().toString();
+                    if (s.contains("@parameter")) {
+                        int index = s.indexOf("@parameter");
+                        return Character.getNumericValue(s.charAt(index + 10));
+                    }
+                }
+            }
+        }
+        return -1;
     }
 }
 
