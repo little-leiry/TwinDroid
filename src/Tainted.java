@@ -12,8 +12,11 @@ public class Tainted {
     private Value mValue;
     private String mElement;
     private List<SootMethod> mParents;
+
+    private Unit mCallUnit;
     private Unit mStartUnit;
     private Set<Tainted> mTaintedChildren;
+
 
     private Set<Pair<String, Value>> mElementAndStructure;
 
@@ -67,12 +70,6 @@ public class Tainted {
         return mElementAndStructure;
     }
 
-    // The return element is only related to the current analyze method.
-    public static String getElement(String element, List<String> elements){
-        if(element!=null) return element;
-        if(elements!=null) return elements.toString();
-        return null;
-    }
 
     public void storeElementAndCorrespondingStructure(String element, Value data_structure) {
         String e;
