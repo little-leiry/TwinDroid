@@ -2,6 +2,8 @@ import soot.toolkits.graph.Block;
 
 import java.util.*;
 
+import static java.lang.System.exit;
+
 public class Graph {
     public static List<Integer> path = new ArrayList<>();
     //public static Set<List<Integer>> call_paths = new HashSet<>();
@@ -17,14 +19,29 @@ public class Graph {
         }
         int block_id = block.getIndexInMethod();
         path.add((Integer) block_id);
-        List<Block> legal_successors = new ArrayList<>();
-        // Ignore the loop in a call path.
+        Set<Block> legal_successors = new HashSet<>();
+        // Make sure that the block ids in the pass are incremental.
+        int flag_small = 1;
         for(Block successor : block.getSuccs()){
             if(successor.getIndexInMethod() > block_id){
                 legal_successors.add(successor);
+                flag_small = 0;
+            } else if(block.getSuccs().size()==1){ // There is a loop in the path.
+                for(Block ss : successor.getSuccs()){
+                    if(ss.getIndexInMethod() > block_id){
+                        legal_successors.add(ss);
+                    }
+                }
             }
         }
-        if(! legal_successors.isEmpty()) {
+        if(flag_small == 1 && block.getSuccs().size() > 1){
+            System.out.println("--- block id: " + block_id);
+            for(Block b : block.getSuccs()){
+                System.out.println(("--- success id: ") + b.getIndexInMethod());
+            }
+            exit(0);
+        }
+        if(!legal_successors.isEmpty()) {
             for (Block successor : legal_successors) {
                 generatePathsFromBlock(successor);
             }

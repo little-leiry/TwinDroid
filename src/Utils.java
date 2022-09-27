@@ -82,7 +82,7 @@ public class Utils {
         return null;
     }
 
-    public static Value getParameter(SootMethod method, Integer parameter_index) {
+    public static Value getParameterOfMethod(SootMethod method, Integer parameter_index) {
         if(method == null) return null;
         Value parameter = null;
         if(method.isConcrete()){
@@ -107,143 +107,6 @@ public class Utils {
         return parameter;
     }
 
-    // Judge whether a value:
-    // 1) is one of the assignment's use values and
-    // 2) this value does not appear in the left of the assignment.
-    public static boolean isRightValueOfAssignStmt(AssignStmt as, Value v) {
-        if(as == null || v == null) return false;
-        List<ValueBox> vbs = as.getUseBoxes();
-        Value left_value = as.getLeftOp();
-        for (ValueBox vb : vbs) {
-            Value use_value = vb.getValue();
-            if (use_value.equals(v) && !left_value.toString().contains(v.toString())) return true;
-        }
-        return false;
-    }
-
-    public static boolean hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
-        if(as == null || values == null) return false;
-        for(Value v : values){
-            if(isRightValueOfAssignStmt(as, v)) return true;
-        }
-        return false;
-    }
-
-    public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
-        if(as==null || v == null) return false;
-        if(as.getLeftOp().equals(v)) return true;
-        return false;
-    }
-
-    public static int hasLeftValueOfAssignStmt(AssignStmt as, List<Value> values){
-        if(as==null || values==null) return -1;
-        for(Value v : values){
-            if(isLeftValueOfAssignStmt(as, v)) return values.indexOf(v);
-        }
-        return -1;
-    }
-
-    public static int isParameterOfInvokeStmt(InvokeExpr i, Value v) {
-        if(i == null || v == null) return -1;
-        if(!v.getUseBoxes().isEmpty()){
-            v = v.getUseBoxes().get(0).getValue();
-        }
-        List<Value> parameters = i.getArgs();
-        if (parameters.contains(v)) {
-            return parameters.indexOf(v);
-        }
-        return -1;
-    }
-
-    public static int hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
-        if(i == null || values == null) return -1;
-        for(Value v : values){
-            int index = isParameterOfInvokeStmt(i, v);
-            if(index != -1) return index;
-        }
-        return -1;
-    }
-
-    public static List<String> stringsToList(String[] strings){
-        if (strings == null) return null;
-        List<String> list = new ArrayList<>();
-        for(String s : strings){
-            list.add(s);
-        }
-        return list;
-    }
-    public static List<String> intToList(int i){
-        if (i < 0) return null;
-        List<String> list = new ArrayList<>();
-        for(int j =0; j<i;j++){
-            list.add(((Integer) j).toString());
-        }
-        return list;
-    }
-
-    public static boolean areRelatedNames(String name, String method_name){
-        method_name = method_name.toLowerCase();
-        return method_name.contains(name);
-    }
-
-    public static boolean isNumeric(String s){
-        Pattern pattern = Pattern.compile("[0-9]*");
-        Matcher isNum = pattern.matcher(s);
-        if(isNum.matches()) return true;
-        return false;
-    }
-
-    public static void printPartingLine(String symbol, PrintWriter pw){
-        String s = "";
-        for(int i = 0; i<100;i++){
-            s+=symbol;
-        }
-        pw.println(s);
-    }
-
-    public static void printPartingLine(String symbol){
-        String s = "";
-        for(int i = 0; i<100;i++){
-            s+=symbol;
-        }
-        System.out.println(s);
-    }
-
-
-    public static String generatePartingLine(String symbol){
-        String s = "";
-        for(int i = 0; i<100;i++){
-            s+=symbol;
-        }
-        return s;
-    }
-
-    public static void initializeAbstractClassesInfo(){
-        for(SootClass cls : Scene.v().getClasses()){
-            if(cls.isConcrete()) { // Implemented class.
-                for (SootClass abstract_cls : cls.getInterfaces()) {
-                    Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
-                    if (implemented_classes == null) {
-                        implemented_classes = new HashSet<>();
-                        implemented_classes.add(cls);
-                        abstractClassToImplementedClasses.put(abstract_cls, implemented_classes);
-                    } else {
-                        implemented_classes.add(cls);
-                    }
-                }
-            }
-        }
-    }
-
-    public static List<Unit> bodyToList(Body body){
-        List<Unit> b = new ArrayList<>();
-        if(body==null) return b;
-        for(Unit unit : body.getUnits()){
-            b.add(unit);
-        }
-        return b;
-    }
-
     public static int getIndexOfUnit(Body body, Unit unit){
         if(body==null || unit == null) return -1;
         return bodyToList(body).indexOf(unit);
@@ -265,34 +128,82 @@ public class Utils {
         return null;
     }
 
-    public static <T> List<T> deepCopy(List<T> src) {
-        List<T> dest = new ArrayList<>();
-        if(src == null){
-            return dest;
+    public static Value getReturnValue(Body body){
+        if(body == null) return null;
+
+        for(Unit unit : body.getUnits()){
+            if(unit instanceof ReturnStmt){
+                return ((ReturnStmt) unit).getOp();
+            }
         }
-        for(T object : src){
-            dest.add(object);
-        }
-        return dest;
+        return null;
     }
 
-    public static <K, V> Map<K, V> deepCopy(Map<K, V> src) {
-        Map<K, V> dest = new HashMap<K, V>();
-        if(src == null){
-            return dest;
+    // Judge whether a value:
+    // 1) is one of the assignment's use values and
+    // 2) this value does not appear in the left of the assignment.
+    public static boolean isRightValueOfAssignStmt(AssignStmt as, Value v) {
+        if(as == null || v == null) return false;
+        if(!v.getUseBoxes().isEmpty()){
+            v = v.getUseBoxes().get(0).getValue();
         }
-        for(Map.Entry<K, V> entry : src.entrySet()){
-            dest.put(entry.getKey(), entry.getValue());
-        }
-        return dest;
-    }
-
-    public static boolean isExpress(String str){
-        char[] ops = {'&', '|', '!','+', '-', '*', '/', '%', '^'};
-        for(char op : ops){
-            if(str.contains(String.valueOf(op))) return true;
+        List<ValueBox> vbs = as.getUseBoxes();
+        Value left_value = as.getLeftOp();
+        for (ValueBox vb : vbs) {
+            Value use_value = vb.getValue();
+            if (use_value.equals(v) && !left_value.toString().contains(v.toString())) return true;
         }
         return false;
+    }
+
+    public static int hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
+        if(as == null || values == null) return -1;
+        for(Value v : values){
+            if(isRightValueOfAssignStmt(as, v)) return values.indexOf(v);
+        }
+        return -1;
+    }
+
+    public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
+        if(as==null || v == null) return false;
+
+        if(as.getLeftOp().equals(v)) return true;
+
+        if(!v.getUseBoxes().isEmpty()){
+            v = v.getUseBoxes().get(0).getValue();
+        }
+        if(as.getLeftOp().equals(v)) return true;
+        return false;
+    }
+
+    public static int hasLeftValueOfAssignStmt(AssignStmt as, List<Value> values){
+        if(as==null || values==null) return -1;
+        for(Value v : values){
+            if(isLeftValueOfAssignStmt(as, v)) {
+                return values.indexOf(v);
+            }
+        }
+        return -1;
+    }
+
+    public static int isParameterOfInvokeStmt(InvokeExpr i, Value v) {
+        if(i == null || v == null) return -1;
+        if(!v.getUseBoxes().isEmpty()){
+            v = v.getUseBoxes().get(0).getValue();
+        }
+        List<Value> parameters = i.getArgs();
+        if (parameters.contains(v)) {
+            return parameters.indexOf(v);
+        }
+        return -1;
+    }
+
+    public static int hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
+        if(i == null || values == null) return -1;
+        for(Value v : values){
+            if(isParameterOfInvokeStmt(i, v)!= -1) return values.indexOf(v);
+        }
+        return -1;
     }
 
     // r7 = r4, r7 = (String) r4
@@ -319,14 +230,19 @@ public class Utils {
         return false;
     }
 
+    public static boolean isNumeric(String s){
+        Pattern pattern = Pattern.compile("[0-9]*");
+        Matcher isNum = pattern.matcher(s);
+        if(isNum.matches()) return true;
+        return false;
+    }
 
-    public static void pause(){
-        try{
-            System.out.println("Enter anything to continue ...");
-            char in = (char) System.in.read();
-        } catch (IOException e){
-            e.printStackTrace();
+    public static boolean isExpress(String str){
+        char[] ops = {'&', '|', '!','+', '-', '*', '/', '%', '^'};
+        for(char op : ops){
+            if(str.contains(String.valueOf(op))) return true;
         }
+        return false;
     }
 
     public static boolean hasDuplicatedItems(List<List<Integer>> paths){
@@ -347,40 +263,118 @@ public class Utils {
         return false;
     }
 
-    public static Value getReturnValue(Body body){
-        if(body == null) return null;
+    public static int isParamStmt(IdentityStmt is){
+        if(is == null) return -1;
 
-        for(Unit unit : body.getUnits()){
-            if(unit instanceof ReturnStmt){
-                return ((ReturnStmt) unit).getOp();
-            }
+        String s = is.getRightOp().toString();
+        if (s.contains("@parameter")) {
+            int index = s.indexOf("@parameter");
+            return Character.getNumericValue(s.charAt(index + 10));
         }
-
-        return null;
+        return -1;
     }
 
-    // Judge whether a Value is the parameter of a method;
-    // Return the index of parameter.
-    public static int isParameterOfMethod(SootMethod method, Value value){
+    public static boolean areRelatedNames(String name, String method_name){
+        method_name = method_name.toLowerCase();
+        return method_name.contains(name);
+    }
 
-        if(method == null || value == null){
-            return -1;
+    public static List<String> stringsToList(String[] strings){
+        if (strings == null) return null;
+        List<String> list = new ArrayList<>();
+        for(String s : strings){
+            list.add(s);
         }
+        return list;
+    }
+    public static List<String> intToList(int i){
+        if (i < 0) return null;
+        List<String> list = new ArrayList<>();
+        for(int j =0; j<i;j++){
+            list.add(((Integer) j).toString());
+        }
+        return list;
+    }
 
-        Body body = method.retrieveActiveBody();
+    public static List<Unit> bodyToList(Body body){
+        List<Unit> b = new ArrayList<>();
+        if(body==null) return b;
         for(Unit unit : body.getUnits()){
-            if(unit instanceof IdentityStmt){
-                IdentityStmt is = (IdentityStmt) unit;
-                if(is.getLeftOp().equals(value)) {
-                    String s = is.getRightOp().toString();
-                    if (s.contains("@parameter")) {
-                        int index = s.indexOf("@parameter");
-                        return Character.getNumericValue(s.charAt(index + 10));
+            b.add(unit);
+        }
+        return b;
+    }
+
+    public static void printPartingLine(String symbol, PrintWriter pw){
+        String s = "";
+        for(int i = 0; i<100;i++){
+            s+=symbol;
+        }
+        pw.println(s);
+    }
+
+    public static void printPartingLine(String symbol){
+        String s = "";
+        for(int i = 0; i<100;i++){
+            s+=symbol;
+        }
+        System.out.println(s);
+    }
+
+    public static String generatePartingLine(String symbol){
+        String s = "";
+        for(int i = 0; i<100;i++){
+            s+=symbol;
+        }
+        return s;
+    }
+
+    public static void initializeAbstractClassesInfo(){
+        for(SootClass cls : Scene.v().getClasses()){
+            if(cls.isConcrete()) { // Implemented class.
+                for (SootClass abstract_cls : cls.getInterfaces()) {
+                    Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
+                    if (implemented_classes == null) {
+                        implemented_classes = new HashSet<>();
+                        implemented_classes.add(cls);
+                        abstractClassToImplementedClasses.put(abstract_cls, implemented_classes);
+                    } else {
+                        implemented_classes.add(cls);
                     }
                 }
             }
         }
-        return -1;
+    }
+
+    public static <T> List<T> deepCopy(List<T> src) {
+        List<T> dest = new ArrayList<>();
+        if(src == null){
+            return dest;
+        }
+        for(T object : src){
+            dest.add(object);
+        }
+        return dest;
+    }
+
+    public static <K, V> Map<K, V> deepCopy(Map<K, V> src) {
+        Map<K, V> dest = new HashMap<K, V>();
+        if(src == null){
+            return dest;
+        }
+        for(Map.Entry<K, V> entry : src.entrySet()){
+            dest.put(entry.getKey(), entry.getValue());
+        }
+        return dest;
+    }
+
+    public static void pause(){
+        try{
+            System.out.println("Enter anything to continue ...");
+            char in = (char) System.in.read();
+        } catch (IOException e){
+            e.printStackTrace();
+        }
     }
 }
 

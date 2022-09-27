@@ -3,40 +3,43 @@ import soot.Unit;
 import soot.Value;
 import soot.toolkits.scalar.Pair;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class Tainted {
     private SootMethod mMethod;
     private Value mValue;
     private String mElement;
-    private List<SootMethod> mParents;
+    private List<Tainted> mParents;
 
     private Unit mCallUnit;
+
     private Unit mStartUnit;
     private Set<Tainted> mTaintedChildren;
 
+    private Map<Value, Integer> mParameters;
 
-    private Set<Pair<String, Value>> mElementAndStructure;
+    private List<Pair<String, Value>> mElementAndStructure;
 
-    public Tainted(SootMethod method, Value value, String element, List<SootMethod> parents) {
+    public Tainted(SootMethod method, Value value, String element, List<Tainted> parents, Unit call_unit) {
         mMethod = method;
         mValue = value;
         mElement = element;
         mParents = parents;
+        mCallUnit = call_unit;
     }
 
-    public Tainted(SootMethod method, Value value, String element){
+    public Tainted(SootMethod method, Value value, String element, Unit call_unit){
         mMethod = method;
         mValue = value;
         mElement = element;
+        mCallUnit = call_unit;
     }
 
-    public Tainted(SootMethod method, Value value, Unit start){
+    public Tainted(SootMethod method, Value value, Unit call_unit, Unit start_unit){
         mMethod = method;
         mValue = value;
-        mStartUnit = start;
+        mCallUnit = call_unit;
+        mStartUnit = start_unit;
     }
 
     public SootMethod getMethod(){
@@ -51,27 +54,31 @@ public class Tainted {
         return mElement;
     }
 
-    public List<SootMethod> getParents(){
+    public List<Tainted> getParents(){
         return mParents;
+    }
+
+    public Unit getCallUnit(){
+        return mCallUnit;
     }
 
     public Unit getStartUnit(){
         return mStartUnit;
-    }
-    public void setParent(List<SootMethod> parents){
-        mParents = parents;
     }
 
     public Set<Tainted> getChildren(){
         return mTaintedChildren;
     }
 
-    public Set<Pair<String, Value>> getElementAndStructure(){
+    public List<Pair<String, Value>> getElementAndStructure(){
         return mElementAndStructure;
     }
 
+    public Map<Value, Integer> getParameters(){
+        return mParameters;
+    }
 
-    public void storeElementAndCorrespondingStructure(String element, Value data_structure) {
+    public void storeElementAndStructure(String element, Value data_structure) {
         String e;
         if(element == null){
             e = "NULL";
@@ -95,7 +102,7 @@ public class Tainted {
 
         Pair<String, Value> e_d = new Pair<String, Value>(element, data_structure);
         if (mElementAndStructure == null) { // This key does not exist.
-            mElementAndStructure = new HashSet<>();
+            mElementAndStructure = new ArrayList<>();
             mElementAndStructure.add(e_d);
             // Log.
             Log.logData(Log.method_data, Utils.generatePartingLine("="));
@@ -113,11 +120,11 @@ public class Tainted {
         }
     }
 
-    public void setElementAndStructure(Set<Pair<String, Value>> e_ds){
+    public void setElementAndStructure(List<Pair<String, Value>> e_ds){
         if(e_ds == null) return;
 
         if(mElementAndStructure == null){
-            mElementAndStructure = new HashSet<>();
+            mElementAndStructure = new ArrayList<>();
         }
         mElementAndStructure.addAll(e_ds);
     }
@@ -140,5 +147,14 @@ public class Tainted {
             mTaintedChildren = new HashSet<>();
         }
         mTaintedChildren.addAll(children);
+    }
+
+    public void storeParameter(Value param, Integer index){
+        if(index < 0 || param == null) return;
+
+        if(mParameters == null){
+            mParameters = new HashMap<>();
+        }
+        mParameters.put(param, index);
     }
 }
