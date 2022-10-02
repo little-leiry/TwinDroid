@@ -7,16 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Log {
-    public static PrintWriter analysis_pw;
 
     public static final String element_data = "logs/element_data.txt";
     public static final String method_data = "logs/method_data.txt";
 
-    public static final String analysis_data = "logs/analysis_data.txt";
+    public static String analysis_data = "logs/analysis_data.txt";
 
-    public static final String methods = "logs/ies.txt";
-
-    public static final String elements = "logs/elements.txt";
+    public static PrintWriter analysis_pw;
 
 
 
@@ -69,12 +66,27 @@ public class Log {
 
     public static void deleteData(String file_path){
         try{
-            FileWriter fw = new FileWriter(file_path);
+            File file = new File(file_path);
+            if(!file.exists()) return;
+            FileWriter fw = new FileWriter(file);
             fw.write("");
             fw.flush();
             fw.close();
         } catch (IOException e){
             e.printStackTrace();
+        }
+    }
+
+    public static void delete(String file_path){
+        File file = new File(file_path);
+        if(!file.exists()) return;
+        if(file.isFile()){
+            file.delete();
+        } else if (file.isDirectory()){
+            File[] files = file.listFiles();
+            for(File f : files){
+                delete(f.getAbsolutePath());
+            }
         }
     }
 
@@ -104,5 +116,16 @@ public class Log {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static int getFileId(File file){
+       long file_size = file.length();
+        return (int) (file_size / 1048576 / 30);
+    }
+
+    public static String getFileId(String path){
+        File file = new File(path);
+        long file_size = file.length();
+        return (int) (file_size / 1048576 / 30) + "";
     }
 }

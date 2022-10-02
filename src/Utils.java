@@ -156,12 +156,15 @@ public class Utils {
         return false;
     }
 
-    public static int hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
-        if(as == null || values == null) return -1;
+    public static List<Integer> hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
+        if(as == null || values == null) return null;
+        List<Integer> index = new ArrayList<>();
         for(Value v : values){
-            if(isRightValueOfAssignStmt(as, v)) return values.indexOf(v);
+            if(isRightValueOfAssignStmt(as, v)){
+                index.add(values.indexOf(v));
+            }
         }
-        return -1;
+        return index;
     }
 
     public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
@@ -198,12 +201,15 @@ public class Utils {
         return -1;
     }
 
-    public static int hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
-        if(i == null || values == null) return -1;
+    public static List<Integer> hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
+        if(i == null || values == null) return null;
+        List<Integer> index = new ArrayList<>();
         for(Value v : values){
-            if(isParameterOfInvokeStmt(i, v)!= -1) return values.indexOf(v);
+            if(isParameterOfInvokeStmt(i, v)!= -1) {
+                index.add(values.indexOf(v));
+            }
         }
-        return -1;
+        return index;
     }
 
     // r7 = r4, r7 = (String) r4

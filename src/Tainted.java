@@ -7,8 +7,8 @@ import java.util.*;
 
 public class Tainted {
     private SootMethod mMethod;
-    private Value mValue;
-    private String mElement;
+    private List<Value> mTaintedValues;
+    private String mOuterElement;
     private List<Tainted> mParents;
 
     private Unit mCallUnit;
@@ -18,26 +18,26 @@ public class Tainted {
 
     private Map<Value, Integer> mParameters;
 
-    private List<Pair<String, Value>> mElementAndStructure;
+    private List<Pair<String, String>> mInnerElementAndStructure;
 
-    public Tainted(SootMethod method, Value value, String element, List<Tainted> parents, Unit call_unit) {
+    public Tainted(SootMethod method, List<Value> values, String element, List<Tainted> parents, Unit call_unit) {
         mMethod = method;
-        mValue = value;
-        mElement = element;
+        mTaintedValues = values;
+        mOuterElement = element;
         mParents = parents;
         mCallUnit = call_unit;
     }
 
-    public Tainted(SootMethod method, Value value, String element, Unit call_unit){
+    public Tainted(SootMethod method, List<Value> values, String element, Unit call_unit){
         mMethod = method;
-        mValue = value;
-        mElement = element;
+        mTaintedValues = values;
+        mOuterElement = element;
         mCallUnit = call_unit;
     }
 
-    public Tainted(SootMethod method, Value value, Unit call_unit, Unit start_unit){
+    public Tainted(SootMethod method, List<Value> values, Unit call_unit, Unit start_unit){
         mMethod = method;
-        mValue = value;
+        mTaintedValues = values;
         mCallUnit = call_unit;
         mStartUnit = start_unit;
     }
@@ -46,12 +46,12 @@ public class Tainted {
         return mMethod;
     }
 
-    public Value getValue(){
-        return mValue;
+    public List<Value> getTaintedValues(){
+        return mTaintedValues;
     }
 
-    public String getElement(){
-        return mElement;
+    public String getOuterElement(){
+        return mOuterElement;
     }
 
     public List<Tainted> getParents(){
@@ -70,63 +70,48 @@ public class Tainted {
         return mTaintedChildren;
     }
 
-    public List<Pair<String, Value>> getElementAndStructure(){
-        return mElementAndStructure;
+    public List<Pair<String, String>> getInnerElementAndStructure(){
+        return mInnerElementAndStructure;
     }
 
     public Map<Value, Integer> getParameters(){
         return mParameters;
     }
 
-    public void storeElementAndStructure(String element, Value data_structure) {
-        String e;
-        if(element == null){
-            e = "NULL";
-        } else {
-            e = element;
-        }
-        String structure;
-        if (data_structure == null){
-            structure = "NULL";
-        } else if (data_structure.toString().contains(".<")) {
-            structure = data_structure.toString();
-        } else {
-            structure = data_structure.getType().toString();
-        }
+    public void storeInnerElementAndStructure(String element, String data_structure) {
 
         Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
-        Log.logData(Log.analysis_data, "- Element: " + e);
-        Log.logData(Log.analysis_data, "- Data structure: " + structure);
+        Log.logData(Log.analysis_data, "- Element: " + element);
+        Log.logData(Log.analysis_data, "- Data structure: " + data_structure);
         Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
 
 
-        Pair<String, Value> e_d = new Pair<String, Value>(element, data_structure);
-        if (mElementAndStructure == null) { // This key does not exist.
-            mElementAndStructure = new ArrayList<>();
-            mElementAndStructure.add(e_d);
+        Pair<String, String> e_d = new Pair<String, String>(element, data_structure);
+        if (mInnerElementAndStructure == null) { // This key does not exist.
+            mInnerElementAndStructure = new ArrayList<>();
+            mInnerElementAndStructure.add(e_d);
             // Log.
             Log.logData(Log.method_data, Utils.generatePartingLine("="));
-            Log.logData(Log.method_data, "+ Element: " + e);
-            Log.logData(Log.method_data, "+ Data structure: " + structure);
+            Log.logData(Log.method_data, "+ Element: " + element);
+            Log.logData(Log.method_data, "+ Data structure: " + data_structure);
         } else {
-            if(!mElementAndStructure.contains(e_d)) { // Avoid duplicated logs.
-                mElementAndStructure.add(e_d);
+            if(!mInnerElementAndStructure.contains(e_d)) { // Avoid duplicated logs.
+                mInnerElementAndStructure.add(e_d);
                 // Log data.
                 Log.logData(Log.method_data, Utils.generatePartingLine("="));
-                Log.logData(Log.method_data, "+ Element: " + e);
-                Log.logData(Log.method_data, "+ Data structure: " + structure);
-                //Log.logData(method_data, Utils.generatePartingLine("-"));
+                Log.logData(Log.method_data, "+ Element: " + element);
+                Log.logData(Log.method_data, "+ Data structure: " + data_structure);
             }
         }
     }
 
-    public void setElementAndStructure(List<Pair<String, Value>> e_ds){
+    public void setInnerElementAndStructure(List<Pair<String, String>> e_ds){
         if(e_ds == null) return;
 
-        if(mElementAndStructure == null){
-            mElementAndStructure = new ArrayList<>();
+        if(mInnerElementAndStructure == null){
+            mInnerElementAndStructure = new ArrayList<>();
         }
-        mElementAndStructure.addAll(e_ds);
+        mInnerElementAndStructure.addAll(e_ds);
     }
 
     public void storeTaintedChildren(Tainted child){
