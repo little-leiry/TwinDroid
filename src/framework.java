@@ -3,6 +3,7 @@ import soot.*;
 import soot.jimple.*;
 import soot.options.Options;
 import soot.toolkits.scalar.Pair;
+import soot.util.JasminOutputStream;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -236,6 +237,9 @@ public class framework {
     // given method signature
     private static void test3() {
         String[] sigs = {
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseProfileable(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
+                "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseDenyPermission(java.util.Set,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseRestrictUpdateHash(int,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseKeySets(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProviderUtils: android.content.pm.parsing.result.ParseResult parseGrantUriPermission(android.content.pm.parsing.component.ParsedProvider,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseUsesPermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
@@ -263,19 +267,26 @@ public class framework {
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
-        String methodSig = sigs[2];
+        String methodSig = sigs[0];
         Body body = Utils.getBodyOfMethod(methodSig);
         /*CompleteBlockGraph cbg = new CompleteBlockGraph(body);
         Graph.generatePathsFromBlock(cbg.getHeads().get(0));
         System.out.println(Graph.paths.size());
         System.out.println(Utils.hasDuplicatedItems(Graph.paths));*/
-       for(Unit unit : body.getUnits()){
-           if(unit instanceof IdentityStmt){
-               IdentityStmt is = (IdentityStmt) unit;
-               int index = Utils.isParamStmt(is);
-               if(index != -1){
-                   System.out.println(is);
-                   System.out.println(index);
+        List<Value> values = new ArrayList<>();
+       for(Unit unit : body.getUnits()) {
+           if(unit instanceof AssignStmt){
+               AssignStmt as = (AssignStmt) unit;
+               if(as.getLeftOp().toString().equals("$z0")){
+                   if(values.isEmpty()) {
+                       values.add(as.getLeftOp());
+                       System.out.println(values);
+                   }
+               }
+               InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+               Value v = Analysis.hasRedefinedValue(as, ie, values, null);
+               if(v!=null){
+                   System.out.println(as);
                }
            }
        }
