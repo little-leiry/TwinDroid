@@ -148,23 +148,29 @@ public class Utils {
             v = v.getUseBoxes().get(0).getValue();
         }
         List<ValueBox> vbs = as.getUseBoxes();
-        Value left_value = as.getLeftOp();
+        Value left_op = as.getLeftOp();
         for (ValueBox vb : vbs) {
             Value use_value = vb.getValue();
-            if (use_value.equals(v) && !left_value.toString().contains(v.toString())) return true;
+            if (use_value.equals(v)) {
+                if (left_op.getUseBoxes().isEmpty()) {
+                    return true;
+                } else if (!left_op.toString().contains(v.toString())) {
+                    return true;
+                }
+            }
         }
         return false;
     }
 
-    public static List<Integer> hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
-        if(as == null || values == null) return null;
-        List<Integer> index = new ArrayList<>();
+    public static List<Value> hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
+        List<Value> result = new ArrayList<>();
+        if(as == null || values == null) return result;
         for(Value v : values){
             if(isRightValueOfAssignStmt(as, v)){
-                index.add(values.indexOf(v));
+                result.add(v);
             }
         }
-        return index;
+        return result;
     }
 
     public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
@@ -179,14 +185,14 @@ public class Utils {
         return false;
     }
 
-    public static int hasLeftValueOfAssignStmt(AssignStmt as, List<Value> values){
-        if(as==null || values==null) return -1;
+    public static Value hasLeftValueOfAssignStmt(AssignStmt as, List<Value> values){
+        if(as==null || values==null) return null;
         for(Value v : values){
             if(isLeftValueOfAssignStmt(as, v)) {
-                return values.indexOf(v);
+                return v;
             }
         }
-        return -1;
+        return null;
     }
 
     public static int isParameterOfInvokeStmt(InvokeExpr i, Value v) {
@@ -201,15 +207,15 @@ public class Utils {
         return -1;
     }
 
-    public static List<Integer> hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
-        if(i == null || values == null) return null;
-        List<Integer> index = new ArrayList<>();
+    public static List<Value> hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
+        List<Value> result = new ArrayList<>();
+        if(i == null || values == null) return result;
         for(Value v : values){
             if(isParameterOfInvokeStmt(i, v)!= -1) {
-                index.add(values.indexOf(v));
+                result.add(v);
             }
         }
-        return index;
+        return result;
     }
 
     // r7 = r4, r7 = (String) r4
