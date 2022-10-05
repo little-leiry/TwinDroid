@@ -415,11 +415,11 @@ public class Analysis {
     public static void storeAssociatedElementAndCorrespondingDataStructure(String associated_element, String data_structure) {
         if(associated_element==null) return;
 
-        if (data_structure == null){
-            return;
+        /*if (data_structure == null){
+            data_structure = "NUll";
         } else if (data_structure.endsWith("parsing.result.ParseResult")){ // The parse result of this element has not been solved completely.
             return;
-        }
+        }*/
 
         Set<String> ds = associatedElementToDataStructures.get(associated_element);
         if (ds == null) { // This key does not exist.
@@ -427,15 +427,15 @@ public class Analysis {
             ds.add(data_structure);
             associatedElementToDataStructures.put(associated_element, ds);
         } else {
-                ds.add(data_structure);
+            ds.add(data_structure);
         }
     }
 
     // Store the byte value's concrete assignment.
     // For the case ID transform of the two associated switch-case statements.
-    public static int storeNumericValueAndCorrespondingConcreteAssignment(AssignStmt as, Map<Value, String> numericValueToConcreteAssignment){
+    public static void storeNumericValueAndCorrespondingConcreteAssignment(AssignStmt as, Map<Value, String> numericValueToConcreteAssignment){
         Value def_value = as.getLeftOp();
-        if(def_value.toString().contains(".<")) return 1;
+        if(!def_value.getUseBoxes().isEmpty()) return;
         List<ValueBox> vbs = as.getUseBoxes();
         if("int_byte_boolean".contains(def_value.getType().toString())){
             if(vbs.size() == 1){
@@ -489,9 +489,7 @@ public class Analysis {
                     numericValueToConcreteAssignment.put(def_value, null);
                 }
             }
-            return 0;
         }
-        return 1;
     }
 
     public static void storeNewValueAndCorrespondingCopy(AssignStmt as, Map<Value, Value> newValueToCopy){
@@ -526,7 +524,7 @@ public class Analysis {
         }
     }
 
-    public static void storeUsefulInfo(Unit unit, List<Value> entry_value_copies, int flag_case, Map<Value, Value> newValeToCopy, Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> valueToLikelyElement){
+    public static void storeUsefulInfo(Unit unit, List<Value> entry_value_copies, Map<Value, Value> newValeToCopy, Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> valueToLikelyElement){
         if(unit==null) return;
 
         if(unit instanceof AssignStmt) {
@@ -542,9 +540,7 @@ public class Analysis {
             }
             storeNewValueAndCorrespondingCopy(as, newValeToCopy);
             storeValueAndCorrespondingLikelyElement(as, valueToLikelyElement);
-            if (flag_case == 1) {
-                storeNumericValueAndCorrespondingConcreteAssignment(as, numericValueToConcreteAssignment);
-            }
+            storeNumericValueAndCorrespondingConcreteAssignment(as, numericValueToConcreteAssignment);
         }
     }
 
@@ -673,7 +669,7 @@ public class Analysis {
         return  null;
     }
 
-    public static Block findStartBlock(CompleteBlockGraph cbg, List<Value> entry_value_copies, int flag_case, Map<Value, Value> newValueToCopy,
+    public static Block findStartBlock(CompleteBlockGraph cbg, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
                                        Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> valueToLikelyElement){
         if(cbg==null || entry_value_copies == null) return null;
 
@@ -700,7 +696,7 @@ public class Analysis {
                     if(start_block!=null) break;
                 }
                 // Store some information before we skip the unit.
-                storeUsefulInfo(unit, entry_value_copies, flag_case, newValueToCopy, numericValueToConcreteAssignment, valueToLikelyElement);
+                storeUsefulInfo(unit, entry_value_copies, newValueToCopy, numericValueToConcreteAssignment, valueToLikelyElement);
             }
             if(start_block != null) break;
         }
@@ -742,9 +738,9 @@ public class Analysis {
     // skip_names: important names. These names are unlikely an element name.
     // skip_methods, skip_classes: important methods / classes. If a statement contains this kind of methods / classes, just skipping this statement.
     // no_analyzed_methods, no_analyzed_classes: these methods' / classes' functions have been known, no need to be analyzed.
-    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> block_ids, Tainted entry, List<Value> entry_value_copies, int flag_case, int flag_start,
+    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> block_ids, Tainted entry, List<Value> entry_value_copies, int flag_start,
                                                  Map<Value, Value> newValueToCopy, Map<Value, String> numericValueToConcreteAssignment,
-                                                 List<SootMethod> recorded_methods, Map<Value, String> valueToLikelyElement) {
+                                                 List<String> recorded_tainted_points, Map<Value, String> valueToLikelyElement) {
 
         SootMethod entry_method = entry.getMethod();
         String entry_element = entry.getOuterElement();
@@ -769,7 +765,7 @@ public class Analysis {
             Block block = blocks.get(block_id);
             for (Unit unit : block) {
                 // Store useful information from this unit.
-                storeUsefulInfo(unit, entry_values_path, flag_case, newValueToCopy, numericValueToConcreteAssignment_path, valueToLikelyElement_path);
+                storeUsefulInfo(unit, entry_values_path, newValueToCopy, numericValueToConcreteAssignment_path, valueToLikelyElement_path);
                 // Analysis should start with the start unit.
                 if(flag_start == 0){
                     if (start_unit.equals(unit)) {
@@ -791,76 +787,67 @@ public class Analysis {
                 List<Value> involved_tainted_values = new ArrayList<>(); // The tainted values that this unit contains.
 
 
-                if(unit instanceof TableSwitchStmt){
-                    Utils.printPartingLine("!");
-                    System.out.println("Find the TableSwitchStmt.");
-                    Utils.printPartingLine("!");
-                    exit(0);
-                }
-
-                if(flag_case == 1) {
-                    // Get the mapping relationship of elements and methods.
-                    // For the switch-case situation:
-                    // switch(element)-case(XXX)=>parseXXX(parser):
-                    // LookupSwitchStmt($i1){case -12356 goto z0 = equals(XXX), b2 = 0}
-                    // LookupSwitchStmt(b2){case 0 goto $r6 = parseXXX(parser)}
-                    if (unit instanceof LookupSwitchStmt) {
-                        LookupSwitchStmt lss = (LookupSwitchStmt) unit;
-                        if (case_value == null) { // Get the bridge case value between two LookupSwitchStmts.
-                            case_value = getCaseValue(lss);
-                        }
-                        // Filter wrong paths.
-                        if (case_value != null && lss.getKey().equals(case_value)) {
-                            String case_id = numericValueToConcreteAssignment_path.get(case_value); // Find the case id associated with this path.
-                            if (case_id != null) {
-                                int id = Integer.parseInt(case_id);
-                                Unit target_unit;
-                                if (id != -1) {
-                                    target_unit = lss.getTarget(id);
-                                } else {
-                                    target_unit = lss.getDefaultTarget();
-                                }
-                                if (target_unit != null) {
-                                    if(i + 1 < block_ids.size()) {
-                                        Unit next_block_head = blocks.get(block_ids.get(i + 1)).getHead();
-                                        Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
-                                        Log.logData(Log.analysis_data, "Case value: " + case_value + " => " + case_id);
-                                        Log.logData(Log.analysis_data, "Target unit (hash code): " + target_unit.hashCode());
-                                        Log.logData(Log.analysis_data, "Next block head (hash code): " + next_block_head.hashCode());
-                                        Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
-                                        // If the next block's first Unit is not the target Unit, this path is incorrect.
-                                        if (!next_block_head.equals(target_unit)) {
-                                            Utils.generatePartingLine("!");
-                                            Log.logData(Log.analysis_data, "Wrong path, stop analyzing!");
-                                            Utils.generatePartingLine("!");
-                                            return;
-                                        }
-                                    } else {
-                                        Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
-                                        Log.logData(Log.analysis_data, "Special path, the end block contains LookupSwitchStmt.");
-                                        Log.logData(Log.analysis_data, block_ids.toString());
-                                        Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
+                // Get the mapping relationship of elements and methods.
+                // For the switch-case situation:
+                // switch(element)-case(XXX)=>parseXXX(parser):
+                // LookupSwitchStmt($i1){case -12356 goto z0 = equals(XXX), b2 = 0}
+                // LookupSwitchStmt(b2){case 0 goto $r6 = parseXXX(parser)}
+                if (unit instanceof LookupSwitchStmt) {
+                    LookupSwitchStmt lss = (LookupSwitchStmt) unit;
+                    if (case_value == null) { // Get the bridge case value between two LookupSwitchStmts.
+                        case_value = getCaseValue(lss);
+                    }
+                    // Filter wrong paths.
+                    if (case_value != null && lss.getKey().equals(case_value)) {
+                        String case_id = numericValueToConcreteAssignment_path.get(case_value); // Find the case id associated with this path.
+                        if (case_id != null) {
+                            int id = Integer.parseInt(case_id);
+                            Unit target_unit;
+                            if (id != -1) {
+                                target_unit = lss.getTarget(id);
+                            } else {
+                                target_unit = lss.getDefaultTarget();
+                            }
+                            if (target_unit != null) {
+                                if(i + 1 < block_ids.size()) {
+                                    Unit next_block_head = blocks.get(block_ids.get(i + 1)).getHead();
+                                    Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
+                                    Log.logData(Log.analysis_data, "Case value: " + case_value + " => " + case_id);
+                                    Log.logData(Log.analysis_data, "Target unit (hash code): " + target_unit.hashCode());
+                                    Log.logData(Log.analysis_data, "Next block head (hash code): " + next_block_head.hashCode());
+                                    Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
+                                    // If the next block's first Unit is not the target Unit, this path is incorrect.
+                                    if (!next_block_head.equals(target_unit)) {
+                                        Utils.generatePartingLine("!");
+                                        Log.logData(Log.analysis_data, "Wrong path, stop analyzing!");
+                                        Utils.generatePartingLine("!");
+                                        return;
                                     }
                                 } else {
-                                    Utils.generatePartingLine("!");
-                                    System.out.println("Cannot find the target Unit of the case ID [ " + case_id + " ].");
-                                    System.out.println("SwitchStmt: " + lss);
-                                    System.out.println("Method: " + entry_method.getSignature());
-                                    Utils.generatePartingLine("!");
-                                    exit(0);
+                                    Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
+                                    Log.logData(Log.analysis_data, "Special path, the end block contains LookupSwitchStmt.");
+                                    Log.logData(Log.analysis_data, block_ids.toString());
+                                    Log.logData(Log.analysis_data, Utils.generatePartingLine("!"));
                                 }
-                                // Finish transformation, reset the case value.
-                                case_value = null;
                             } else {
                                 Utils.generatePartingLine("!");
-                                System.out.println("Cannot find the corresponding case ID of the case value [ " + case_value + " ].");
+                                System.out.println("Cannot find the target Unit of the case ID [ " + case_id + " ].");
+                                System.out.println("SwitchStmt: " + lss);
                                 System.out.println("Method: " + entry_method.getSignature());
                                 Utils.generatePartingLine("!");
                                 exit(0);
                             }
+                            // Finish transformation, reset the case value.
+                            case_value = null;
+                        } else {
+                            Utils.generatePartingLine("!");
+                            System.out.println("Cannot find the corresponding case ID of the case value [ " + case_value + " ].");
+                            System.out.println("Method: " + entry_method.getSignature());
+                            Utils.generatePartingLine("!");
+                            exit(0);
                         }
-                        continue;
                     }
+                    continue;
                 }
 
                 // Filter wrong paths.
@@ -1039,8 +1026,8 @@ public class Analysis {
                         if(base != null){
                             // Update the tainted value.
                             Value newly_tainted_value = base;
-                            tainted_unit = unit;
                             updateTaintedValues(newly_tainted_value, involved_tainted_values, tainted_values, newValueToCopy, callee_name);
+                            tainted_unit = unit;
                             continue;
                         }
                     }
@@ -1048,16 +1035,16 @@ public class Analysis {
                         if (base != null) {
                             // Update the tainted value.
                             Value newly_tainted_value = base;
-                            tainted_unit = unit;
                             updateTaintedValues(newly_tainted_value, involved_tainted_values, tainted_values, newValueToCopy, callee_name);
+                            tainted_unit = unit;
                             continue;
                         }
                     }
                     if(callee_name.equals("arraycopy")){
                         // Update the tainted value.
                         Value newly_tainted_value = ie.getArg(2);
-                        tainted_unit = unit;
                         updateTaintedValues(newly_tainted_value, involved_tainted_values, tainted_values, newValueToCopy, callee_name);
+                        tainted_unit = unit;
                         continue;
                     }
                     if(needRecordMethod(assignStmt, flag_parser, callee_name)){
@@ -1081,9 +1068,10 @@ public class Analysis {
                                 exit(0);
                             }
                         }
-                        if(!recorded_methods.contains(callee)) { // This method has not been stored.
+                        String tainted_point_sig = callee.hashCode() + parameters.hashCode() + element;
+                        if(!recorded_tainted_points.contains(tainted_point_sig)) { // This tainted point has not been stored.
                             Log.logData(Log.analysis_data, "--- Record the tainted method: " + callee_name);
-                            recorded_methods.add(callee);
+                            recorded_tainted_points.add(tainted_point_sig);
                             entry.storeTaintedChildren(new Tainted(callee, parameters, element, unit)); // This element only related to entry method.
                             String associated_element = getAssociatedElement(entry_element, element); // This element related to entry method and its parents.
                             List<Tainted> parents = Utils.deepCopy(entry_parents);
@@ -1141,9 +1129,9 @@ public class Analysis {
                     }
                     // Update the tainted value.
                     Value newly_tainted_value = as.getLeftOp();
-                    tainted_unit = unit;
                     updateTaintedValues(newly_tainted_value, involved_tainted_values, tainted_values, newValueToCopy,callee_name);
                 }
+                tainted_unit = unit;
             }
         }
 
@@ -1189,15 +1177,10 @@ public class Analysis {
 
         List<Value> entry_value_copies = Utils.deepCopy(entry.getTaintedValues());
 
-        // If the method contains LookupSwitchStmts, we need to store the concrete values of numeric Values for case id transformation between two LookupSwitchStmt.
-        int flag_case = 0;
         for(Unit unit : body.getUnits()){
             if(unit instanceof IdentityStmt){
                 IdentityStmt is = (IdentityStmt) unit;
                 storeParameterOfTaintedPoint(entry, is);
-            } else if (unit instanceof LookupSwitchStmt){
-                flag_case = 1;
-                break;
             }
         }
         // To avoid path explosion caused by massive blocks, we start our analysis with the block we are interested in.
@@ -1212,7 +1195,7 @@ public class Analysis {
             Log.logData(Log.analysis_data, "Transform the entry value :" + entry_value_copies);
             Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
         }
-        Block start_block = findStartBlock(cbg, entry_value_copies, flag_case, newValueToCopy, numericValueToConcreteAssignment, valueToLikelyElement);
+        Block start_block = findStartBlock(cbg, entry_value_copies, newValueToCopy, numericValueToConcreteAssignment, valueToLikelyElement);
         if(start_block == null){
             // These methods do not implement the general analysis methods.
             // We need transform the entry value.
@@ -1222,7 +1205,7 @@ public class Analysis {
             Log.logData(Log.analysis_data, "Cannot find the start block, transform the entry value :" + entry_value_copies);
             Log.logData(Log.analysis_data, Utils.generatePartingLine("+"));
             // Find the start block again.
-            start_block = findStartBlock(cbg, entry_value_copies, flag_case, newValueToCopy, numericValueToConcreteAssignment, valueToLikelyElement);
+            start_block = findStartBlock(cbg, entry_value_copies,newValueToCopy, numericValueToConcreteAssignment, valueToLikelyElement);
             if(start_block == null) { // This method no needs to analysis.
                 entry.storeInnerElementAndStructure(null, null);
                 entry.storeTaintedChildren(null);
@@ -1240,7 +1223,6 @@ public class Analysis {
 
         // Log data.
         Log.logData(Log.analysis_data, "+ Start block id: " + start_block.getIndexInMethod());
-        Log.logData(Log.analysis_data, "+ flag case: " + flag_case);
 
         // If the start block contains the method's start unit, the analysis should start with the start unit.
         Unit start_unit = entry.getStartUnit();
@@ -1281,14 +1263,14 @@ public class Analysis {
         Log.logData(Log.method_data, "+ Method: " + entry_method.getSignature());
 
         int path_num = 0;
-        List<SootMethod> recorded_methods = new ArrayList<>();  // Avoid duplicated recoding, because multiple paths may involve the same methods.
+        List<String> recorded_tainted_points = new ArrayList<>();  // Avoid duplicated recoding, because multiple paths may involve the same methods.
         while(!Graph.paths.isEmpty()) {
             List<Integer> path = Graph.paths.get(0);
             Graph.paths.remove(0);
             Log.logData(Log.analysis_data, Utils.generatePartingLine(">"));
             Log.logData(Log.analysis_data, "+ Path: " + path);
-            dataFlowAnalysisForBlocks(cbg.getBlocks(), path, entry, entry_value_copies, flag_case, flag_start, newValueToCopy,
-                    numericValueToConcreteAssignment, recorded_methods, valueToLikelyElement);
+            dataFlowAnalysisForBlocks(cbg.getBlocks(), path, entry, entry_value_copies, flag_start, newValueToCopy,
+                    numericValueToConcreteAssignment, recorded_tainted_points, valueToLikelyElement);
             path_num+=1;
             if(path_num == total_num || path_num % 1000 == 0) {
                 System.out.println("Analyzed path num: " + path_num);

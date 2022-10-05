@@ -13,6 +13,8 @@ public class Log {
 
     public static String analysis_data = "logs/analysis_data.txt";
 
+    public static String suspicious_structures = "logs/useful_structures.txt";
+
     public static PrintWriter analysis_pw;
 
 
