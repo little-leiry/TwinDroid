@@ -12,6 +12,7 @@ public class Log {
     public static final String method_data = "logs/method_data.txt";
 
     public static String analysis_data = "logs/analysis_data.txt";
+    public static String analysis_data2 = "logs/analysis_data2.txt";
 
     public static String suspicious_structures = "logs/useful_structures.txt";
 

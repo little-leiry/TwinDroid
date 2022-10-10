@@ -12,19 +12,22 @@ import java.util.*;
 
 import static java.lang.Thread.sleep;
 
-public class framework {
-    public static final String path = "/data/disk_16t_2/leiry/framework.apk";
-    public static final String path_test = "test_java";
+public class Main {
+    public static final String path = "/data/disk_16t_2/leiry/systemCode";
+    public static final String path_test = "/data/disk_16t_2/leiry/services.apk";
 
     public static List<String> call_path = new ArrayList<>();
     public static List<List<String>> call_paths = new ArrayList<>();
     public static Map<String, List<String>> methodToParents = new HashMap<String, List<String>>();
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        //sootInitial_test(path_test);
         sootInitial(path);
-        Utils.initializeAbstractClassesInfo();
-        findEntries();
-        //findSuspiciousDataStructures();
+        Utils.initializeInterfaceClassesInfo();
+        //test3();
+        //findEntries();
+        findSuspiciousDataStructures();
+        //AnalysisForUsingMethods.getEntries();
         /*ElementInfo test = new ElementInfo();
         test6(test);
         System.out.println(test.getCaseNum());
@@ -48,13 +51,13 @@ public class framework {
         Scene.v().loadNecessaryClasses();
     }
 
-    private static void sootInitial_test(String apkPath) {
+    private static void sootInitial_test(String javaPath) {
         soot.G.reset();
         // android.jar包位置
         Options.v().set_force_android_jar("lib/android31.jar");
         Options.v().set_src_prec(Options.src_prec_java);
         // 以下不用管
-        Options.v().set_process_dir(Collections.singletonList(apkPath));
+        Options.v().set_process_dir(Collections.singletonList(javaPath));
         Options.v().set_whole_program(true);
         Options.v().set_allow_phantom_refs(true);
         Options.v().set_output_format(Options.output_format_none);
@@ -64,7 +67,7 @@ public class framework {
 
     // analyse test.javad
     private static void test() {
-        sootInitial_test(path_test);
+        sootInitial_test(path);
         //SootClass cls =Scene.v().getSootClassUnsafe("test");
         /*for(SootMethod sm : cls.getMethods()){
             *//*for(Unit unit: sm.retrieveActiveBody().getUnits()){
@@ -74,40 +77,6 @@ public class framework {
             }*//*
             System.out.println(sm.getDeclaringClass());
         }*/
-        List<Body> bodies = Utils.getBodyOfMethod("test", "testSample");
-        for (Body body : bodies) {
-            System.out.println(body);
-            //CompleteBlockGraph tug = new CompleteBlockGraph(body);
-            //System.out.println(tug);
-            for(Unit unit : body.getUnits()){
-                /*if(unit instanceof AssignStmt){
-                    AssignStmt as = (AssignStmt) unit;
-                    System.out.println("---" + as);
-                    *//*InvokeExpr i = Utility.getInvokeOfAssignStmt(as);
-                    if(i!=null) {
-                        if (i.getMethod().getName().equals("equals")) {
-                            System.out.println(as);
-                            System.out.println(i.getArgs().get(0));
-                        }
-                    }*//*
-                }*/
-
-                if(unit instanceof TableSwitchStmt){
-                    TableSwitchStmt lss = (TableSwitchStmt) unit;
-                    System.out.println(lss);
-                }
-                /*if (unit instanceof IfStmt){
-                    IfStmt is = (IfStmt) unit;
-                    System.out.println(is.getCondition());
-                }
-                if(unit instanceof GotoStmt){
-                    GotoStmt gs = (GotoStmt) unit;
-                    UnitBox ub = gs.getTargetBox();
-                    System.out.println(ub.getUnit());
-                    System.out.println(gs.getTarget());
-                }*/
-            }
-        }
     }
 
 
@@ -124,45 +93,47 @@ public class framework {
         String[] no_analysis_mds = {"max", "min", "create", "digit", "composeLongVersionCode", "computeMinSdkVersion", "computeTargetSdkVersion"};
         String[] skip_cls = {"android.content.res.XmlResourceParser", "android.content.pm.parsing.result.ParseInput", "com.android.internal.util.AnnotationValidations", "android.util.Slog"};
         String[] no_analysis_cls = {"com.android.internal.util.CollectionUtils", "android.text.TextUtils", "com.android.internal.util.ArrayUtils", "android.content.pm.parsing.FrameworkParsingPackageUtils"};
-        SkipInfo.skip_names.addAll(new ArrayList<>(Arrays.asList(skip_nms)));
-        SkipInfo.skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
-        SkipInfo.no_analyzed_methods.addAll(new ArrayList<>(Arrays.asList(no_analysis_mds)));
-        SkipInfo.skip_classes.addAll(new ArrayList<>(Arrays.asList(skip_cls)));
-        SkipInfo.no_analyzed_classes.addAll(new ArrayList<>(Arrays.asList(no_analysis_cls)));
+        AnalysisForParsingClass.skip_names.addAll(new ArrayList<>(Arrays.asList(skip_nms)));
+        AnalysisForParsingClass.skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
+        AnalysisForParsingClass.no_analyzed_methods.addAll(new ArrayList<>(Arrays.asList(no_analysis_mds)));
+        AnalysisForParsingClass.skip_classes.addAll(new ArrayList<>(Arrays.asList(skip_cls)));
+        AnalysisForParsingClass.no_analyzed_classes.addAll(new ArrayList<>(Arrays.asList(no_analysis_cls)));
+
+        AnalysisForParsingClass.findEntryPoints();
 
         List<Tainted> analyzed_tainted_points = new ArrayList<>();
 
-        Analysis.findEntryPoints();
-
-        while (!Analysis.tainted_points.isEmpty()) {
-            Tainted tainted_point = Analysis.tainted_points.poll();
+        while (!AnalysisForParsingClass.tainted_points.isEmpty()) {
+            Tainted tainted_point = AnalysisForParsingClass.tainted_points.poll();
             SootMethod tainted_method = tainted_point.getMethod();
             String tainted_element = tainted_point.getOuterElement();
-
+            List<Value> tainted_values = tainted_point.getTaintedValues();
             int flag_analyzed = 0;
+
             for(Tainted atp : analyzed_tainted_points){
-                if(atp.getMethod().equals(tainted_method)) {
-                    flag_analyzed = 1; // This method has been analyzed.
+                if(atp.getMethod().equals(tainted_method) && atp.getTaintedValues().equals(tainted_values)) {
+                    flag_analyzed = 1; // This tainted method has been analyzed.
+                    tainted_point.setParameters(atp.getParameters()); // The same tainted methods have the same parameters.
                     List<Pair<String, String>> e_ds = atp.getInnerElementAndStructure();
-                    tainted_point.setInnerElementAndStructure(e_ds); // The same method has the same <element, structure>.
+                    tainted_point.setInnerElementsAndStructures(e_ds); // The same tainted methods have the same <element, structure>.
                     if(e_ds != null) {
                         for (Pair<String, String> e_d : e_ds) {
                             String e = e_d.getO1();
                             String d = e_d.getO2();
-                            String associated_element = Analysis.getAssociatedElement(tainted_element, e); // This element is related to the tainted method and its parents.
-                            Analysis.storeAssociatedElementAndCorrespondingDataStructure(associated_element, d);
+                            String associated_element = AnalysisForParsingClass.getAssociatedElement(tainted_element, e); // This element is related to the tainted method and its parents.
+                            AnalysisForParsingClass.storeAssociatedElementAndCorrespondingDataStructure(associated_element, d);
                         }
                     }
                     // If this method tainted other methods, store their information.
-                    Set<Tainted> children = atp.getChildren();
-                    tainted_point.setTaintedChildren(children); // The same method has the same children.
+                    Set<Tainted> children = atp.getTaintedChildren();
+                    tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
                     if(children != null) {
                         List<Tainted> parents = Utils.deepCopy(tainted_point.getParents());
                         parents.add(tainted_point);
                         for (Tainted child : children) {
                             String element = child.getOuterElement(); // This element only associate with the tainted method.
-                            String associated_element = Analysis.getAssociatedElement(tainted_element, element); // This element associate with the tainted method and its parents.
-                            Analysis.tainted_points.offer(new Tainted(child.getMethod(), child.getTaintedValues(), associated_element, parents, child.getCallUnit()));
+                            String associated_element = AnalysisForParsingClass.getAssociatedElement(tainted_element, element); // This element associate with the tainted method and its parents.
+                            AnalysisForParsingClass.tainted_points.offer(new Tainted(child.getMethod(), child.getTaintedValues(), associated_element, parents, child.getCallUnit()));
                         }
                     }
                     break;
@@ -178,13 +149,13 @@ public class framework {
             Log.logData(Log.analysis_data, "+ Analyzed method: " + tainted_method);
             Log.logData(Log.analysis_data, "+ Entry value: " + tainted_point.getTaintedValues());
             analyzed_tainted_points.add(tainted_point);
-            Analysis.dataFlowAnalysisForMethod(tainted_point);
+            AnalysisForParsingClass.dataFlowAnalysisForMethod(tainted_point);
 
             //Utils.pause();
             //sleep(2000);
         }
 
-        for(Map.Entry<String, Set<String>> entry: Analysis.associatedElementToDataStructures.entrySet()){
+        for(Map.Entry<String, Set<String>> entry: AnalysisForParsingClass.associatedElementToDataStructures.entrySet()){
             String associated_element = entry.getKey();
             Log.logData(Log.element_data, Utils.generatePartingLine("="));
             Log.logData(Log.element_data, "+ associated element: " + associated_element);
@@ -193,14 +164,14 @@ public class framework {
                 Log.logData(Log.element_data, Utils.generatePartingLine("*"));
                 Log.logData(Log.element_data, "+ data structure: " + ds);
                 out += ds + ",";
-                if(ds!=null && ds.contains(".<") && ds.contains("ParsingPackageImpl")) {
+                if(ds!=null && ds.contains(".<") && ds.contains(AnalysisForParsingClass.parsedPackage_settings_class)) {
                     String type = ds.split(" ")[1];
                     if (type.contains("list") || type.contains("List") || type.contains("[]") || type.contains("Queue") || type.contains("Stack")) {
-                        Log.logData(Log.suspicious_structures, ds);
+                        Log.logData(Log.suspicious_structures, ds + "=>" + associated_element);
                         for (Tainted point : analyzed_tainted_points) {
                             List<Pair<String, String>> e_ds = point.getInnerElementAndStructure();
                             for (Pair<String, String> e_d : e_ds) {
-                                String element = Analysis.getAssociatedElement(point.getOuterElement(), e_d.getO1());
+                                String element = AnalysisForParsingClass.getAssociatedElement(point.getOuterElement(), e_d.getO1());
                                 if (associated_element.equals(element) && ds.equals(e_d.getO2())) {
                                     Log.logData(Log.element_data, Utils.generatePartingLine("-"));
                                     Log.logData(Log.element_data, "+ call path:");
@@ -218,112 +189,93 @@ public class framework {
         }
     }
 
-    private static List<String> findEntries(){
-        // Data preprocess.
-        List<String> suspicious_structures = Log.readData(Log.suspicious_structures);
-        List<String> suspicious_fields = new ArrayList<>();
-        for(String structure : suspicious_structures){
-            String f = "<" + structure.split(".<")[1];
-            if(!suspicious_fields.contains(f)) {
-                suspicious_fields.add(f);
-            }
-        }
-        //System.out.println(suspicious_fields.size());
+    public static void findSuspiciousMethods(){
+        String[] skip_mds = {"append", "size"};
+        String[] skip_cls = {"com.android.internal.util.AnnotationValidations", "android.util.Slog"};
+        AnalysisForUsingMethods.skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
+        AnalysisForUsingMethods.skip_classes.addAll(new ArrayList<>(Arrays.asList(skip_cls)));
 
-        String className = "android.content.pm.parsing.ParsingPackageImpl"; // The class for storing the parsed package's settings.
-        SootClass cls = Scene.v().getSootClassUnsafe(className);
-        // Get the public fields of the class.
-        List<String> public_fields = new ArrayList<>();
-        for(SootField f : cls.getFields()){
-            if(f.isPublic()){
-                public_fields.add(f.getSignature());
-            }
-        }
-        // Find the entries for accessing the suspicious data structures.
-        List<String> entries = new ArrayList<>();
-        for(String f : suspicious_fields){
-            if(public_fields.contains(f)){ // The public field can be accessed through the corresponding class object.
-                entries.add(f);
-            }
-        }
-        for(SootMethod method : cls.getMethods()){
-            String method_name = method.getName();
-            if(method_name.startsWith("get")) {
-                Body body = method.retrieveActiveBody();
-                Value return_value = null;
-                for (Unit unit : body.getUnits()) {
-                    if (unit instanceof AssignStmt) {
-                        AssignStmt as = (AssignStmt) unit;
-                        String right_op = as.getRightOp().toString();
-                        if (right_op.contains(".<")) {
-                            String likely_field = "<" + right_op.split(".<")[1];
-                            if (suspicious_fields.contains(likely_field)) {
-                                System.out.println(likely_field);
-                                return_value = as.getLeftOp();
-                            } else if(return_value!=null && return_value.equals(as.getLeftOp())){ // This value has been redefined.
-                                return_value = null;
-                            }
-                        } else if (return_value!=null && return_value.equals(as.getLeftOp())){ // This value has been redefined.
-                            return_value = null;
-                        }
-                    } else if (unit instanceof ReturnStmt) {
-                        ReturnStmt rs = (ReturnStmt) unit;
-                        if (return_value != null && return_value.equals(rs.getOp())) {
-                            entries.add(method.getSignature());
-                            //System.out.println(method);
+        Map<String, String> entryToElement = AnalysisForUsingMethods.getEntries();
+        AnalysisForUsingMethods.findEntryPoints(entryToElement);
+
+        List<Tainted> analyzed_tainted_points = new ArrayList<>();
+
+        while (!AnalysisForUsingMethods.tainted_points.isEmpty()) {
+            Tainted tainted_point = AnalysisForUsingMethods.tainted_points.poll();
+            SootMethod tainted_method = tainted_point.getMethod();
+            String tainted_element = tainted_point.getOuterElement();
+            List<Value> tainted_values = tainted_point.getTaintedValues();
+            int flag_analyzed = 0;
+
+            for (Tainted atp : analyzed_tainted_points) {
+                if (atp.getMethod().equals(tainted_method) && atp.getTaintedValues().equals(tainted_values)) {
+                    flag_analyzed = 1; // This tainted method has been analyzed.
+                    tainted_point.setParameters(atp.getParameters()); // The same tainted methods have the same parameters.
+                    List<String> structures = atp.getDataStructures();
+                    tainted_point.setDataStructures(structures); // The same tainted methods have the same data structures.
+                    if (structures != null) {
+                        for (String structure : structures) {
+                            AnalysisForUsingMethods.storeMethodAndElementAndCorrespondingDataStructure(tainted_method, tainted_element, structure);
                         }
                     }
+                    // If this method tainted other methods, store their information.
+                    Set<Tainted> children = atp.getTaintedChildren();
+                    tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
+                    if (children != null) {
+                        List<Tainted> parents = Utils.deepCopy(tainted_point.getParents());
+                        parents.add(tainted_point);
+                        for (Tainted child : children) {
+                            AnalysisForUsingMethods.tainted_points.offer(new Tainted(child.getMethod(), child.getTaintedValues(), tainted_element, parents, child.getCallUnit()));
+                        }
+                    }
+                    break;
                 }
             }
+
+            if (flag_analyzed == 1) {
+                analyzed_tainted_points.add(tainted_point);
+                continue;
+            }
+
+            Log.logData(Log.analysis_data, Utils.generatePartingLine("#"));
+            Log.logData(Log.analysis_data, "+ Analyzed method: " + tainted_method);
+            Log.logData(Log.analysis_data, "+ Entry value: " + tainted_point.getTaintedValues());
+            analyzed_tainted_points.add(tainted_point);
+            AnalysisForUsingMethods.dataFlowAnalysisForMethod(tainted_point);
+
+            //Utils.pause();
         }
-        return entries;
     }
 
     // print body
     // given class name and method name
     public static void test2() {
-        String className = "android.content.pm.parsing.ParsingPackageImpl";
-        String className2 = "android.content.pm.FeatureGroupInfo";
-        String methodName = "getActivities";
-        String methodName2 = "addActivity";
-        String methodName3 = "assignDerivedFields";
-        String methodName4 = "writeToParcel";
-        //String className = "android.content.pm.parsing.component.ParsedPermission";
-        //String className = "android.content.pm.parsing.result.ParseResult";
-        SootClass cls = Scene.v().getSootClassUnsafe(className);
-        for(SootField f: cls.getFields()){
-            if(f.isPublic()){
-                System.out.println(f);
-            }
-        }
-        //System.out.println(cls.getMethods());
-        //String methodName = "addIntent";
-        List<Body> bodies = Utils.getBodyOfMethod(className, methodName);
+        String[] className = {"android.content.pm.parsing.ParsingPackageImpl",
+                "com.android.server.pm.PackageManagerService",
+                "android.content.pm.parsing.component.ParsedComponent",
+                "com.android.server.pm.parsing.pkg.PackageImpl",
+                "android.content.res.XmlBlock",
+                "com.android.server.pm.permission.PermissionManagerService"
+        };
+        String[] methodName = {"getActivities", "addActivity", "preparePackageLI", "newParser", "revokeRuntimePermissionsIfGroupChangedInternal"};
+
+        //SootClass cls = Scene.v().getSootClassUnsafe(className[3]);
+        List<Body> bodies = Utils.getBodyOfMethod(className[5], methodName[4]);
         Value v1 = null;
-        for (Body body : bodies) {
-            System.out.println(body);
-            for(Unit u : body.getUnits()){
-                if(u instanceof AssignStmt){
-                    AssignStmt as = (AssignStmt) u;
-                    if(as.getRightOp().toString().contains(".<")){
-                        v1 = as.getRightOp();
-                        System.out.println(v1.getUseBoxes());
-                        System.out.println(as.getLeftOp().getType());
-                    }
-                }
-            }
-        }
-        List<Body> bodies2 = Utils.getBodyOfMethod(className, methodName2);
         Value v2 = null;
-        for(Body body : bodies2){
-            for(Unit u : body.getUnits()){
+        for(Body b : bodies){
+            for(Unit u: b.getUnits()){
                 if(u instanceof AssignStmt){
                     AssignStmt as = (AssignStmt) u;
-                    if(as.getLeftOp().equals(v1)){
-                        System.out.println("---" + as);
-                    }
-                    if(as.getLeftOp().toString().contains(".<")){
-                        v2 = as.getLeftOp();
+                    InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                    if(ie!=null && ie.getMethod().getName().equals("getPermissions")){
+                        if(v1==null) {
+                            v1 = as.getRightOp();
+                        } else if(v2 == null){
+                            v2 = as.getRightOp();
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
@@ -331,20 +283,13 @@ public class framework {
         System.out.println(v1);
         System.out.println(v2);
         System.out.println(v1.equals(v2));
-        /*List<Body> bodies3 = Utils.getBodyOfMethod(className, methodName3);
-        for(Body b : bodies3){
-            System.out.println(b);
-        }
-        List<Body> bodies4 = Utils.getBodyOfMethod(className2, methodName4);
-        for(Body b : bodies4){
-            System.out.println(b);
-        }*/
     }
 
     // print body
     // given method signature
     private static void test3() {
         String[] sigs = {
+                "<com.android.server.pm.PackageManagerService: com.android.server.pm.PackageManagerService$PrepareResult preparePackageLI(com.android.server.pm.PackageManagerService$InstallArgs,com.android.server.pm.PackageManagerService$PackageInstalledInfo)>",
                 "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addActivity(android.content.pm.parsing.component.ParsedActivity)>",
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseProfileable(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseDenyPermission(java.util.Set,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
@@ -376,28 +321,35 @@ public class framework {
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
-        String methodSig = sigs[22];
+        String methodSig = sigs[1];
         Body body = Utils.getBodyOfMethod(methodSig);
+        Map<Pair<SootMethod, String>, String> test = new HashMap<>();
+        Pair<SootMethod, String> a = new Pair<>(body.getMethod(), "TEST");
+        test.put(a, "A");
+        System.out.println(test.get(new Pair<SootMethod, String>(body.getMethod(), "TEST")));
         /*CompleteBlockGraph cbg = new CompleteBlockGraph(body);
         Graph.generatePathsFromBlock(cbg.getHeads().get(0));
         System.out.println(Graph.paths.size());
         System.out.println(Utils.hasDuplicatedItems(Graph.paths));*/
-        List<Value> v1 = new ArrayList<>();
-        //List<Value> v2 = new ArrayList<>();
-        List<Pair<String, SootMethod>> test = new ArrayList<>();
-        Pair<String ,SootMethod> p = null;
+        /*List<Value> v1 = new ArrayList<>();
+        List<Value> v2 = new ArrayList<>();
        for(Unit unit : body.getUnits()) {
            if(unit instanceof AssignStmt){
                AssignStmt as = (AssignStmt) unit;
-               v1.add(as.getLeftOp());
-               //v2.add(as.getLeftOp());
-               System.out.println(v1.hashCode());
-               //System.out.println(v2.hashCode());
+               if(as.getUseBoxes().size() == 2 && as.getRightOp().toString().contains(".<")){
+                   v1.add(as.getRightOp());
+               }
                break;
            }
        }
-        System.out.println(test);
-        System.out.println(test.contains(p));
+       for(Unit unit : body.getUnits()){
+           if(unit instanceof AssignStmt) {
+               AssignStmt as = (AssignStmt) unit;
+               if(!Utils.hasRightValueOfAssignStmt(as, v1).isEmpty()){
+                   System.out.println(as);
+               }
+           }
+       }*/
     }
 
 
@@ -409,22 +361,24 @@ public class framework {
     }
 
     public static void test5() throws IOException, InterruptedException {
-        String s = "r0.<android.content.pm.parsing.ParsingPackageImpl: java.util.List instrumentations>";
-        String[] ss = s.split(" ");
-        System.out.println(ss[1]);
-        for(String a : ss){
-            System.out.println(a);
-        }
+        List<String> a= new ArrayList<>();
+        List<String> b = new ArrayList<>();
+        a.add("A");
+        b.add("A");
+        System.out.println(a.equals(b));
     }
     public static void test6(){
-        List<String> l1 = new ArrayList<>();
-        l1.add("a");
-        List<String> l2 = new ArrayList<>();
-        l2.add("b");
-        System.out.println(l1.equals(l2));
-        System.out.println(l1.hashCode());
-        System.out.println(l2.hashCode());
+        /*List<String> a = new ArrayList<>();
+        a.add("A");
+        ElementInfo.no_analyzed_classes.addAll(a);
+        List<String> b = new ArrayList<>();
+        b.add("B");
+        Log.no_analyzed_classes.addAll(b);
+        System.out.println(ElementInfo.no_analyzed_classes);
+        System.out.println(Log.no_analyzed_classes);*/
+
     }
+
 
     public static void generateCallPaths(String method_sig, int flag, int depth){
         System.out.println("-----------------------------");

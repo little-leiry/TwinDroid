@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
 public class Utils {
 
     // One abstract class may be implemented by multiple classes.
-    public static Map<SootClass, Set<SootClass>> abstractClassToImplementedClasses = new HashMap<SootClass, Set<SootClass>>();
+    public static Map<SootClass, Set<SootClass>> interfaceClassToImplementedClasses = new HashMap<SootClass, Set<SootClass>>();
     public Utils() {
     }
 
@@ -132,8 +132,11 @@ public class Utils {
         if(body == null) return null;
 
         for(Unit unit : body.getUnits()){
-            if(unit instanceof ReturnStmt){
-                return ((ReturnStmt) unit).getOp();
+            if(unit instanceof ReturnStmt) {
+                Value return_value = ((ReturnStmt) unit).getOp();
+                if (!(return_value instanceof NullConstant)){
+                    return ((ReturnStmt) unit).getOp();
+                }
             }
         }
         return null;
@@ -341,20 +344,20 @@ public class Utils {
         return s;
     }
 
-    public static void initializeAbstractClassesInfo(){
+    public static void initializeInterfaceClassesInfo(){
         for(SootClass cls : Scene.v().getClasses()){
-            if(cls.isConcrete()) { // Implemented class.
-                for (SootClass abstract_cls : cls.getInterfaces()) {
-                    Set<SootClass> implemented_classes = abstractClassToImplementedClasses.get(abstract_cls);
-                    if (implemented_classes == null) {
-                        implemented_classes = new HashSet<>();
-                        implemented_classes.add(cls);
-                        abstractClassToImplementedClasses.put(abstract_cls, implemented_classes);
-                    } else {
-                        implemented_classes.add(cls);
-                    }
+            if(cls.isInterface()) continue;
+            for (SootClass interface_class : cls.getInterfaces()) {
+                Set<SootClass> implemented_classes = interfaceClassToImplementedClasses.get(interface_class);
+                if (implemented_classes == null) {
+                    implemented_classes = new HashSet<>();
+                    implemented_classes.add(cls);
+                    interfaceClassToImplementedClasses.put(interface_class, implemented_classes);
+                } else {
+                    implemented_classes.add(cls);
                 }
             }
+
         }
     }
 
