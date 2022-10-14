@@ -2,31 +2,41 @@ import soot.*;
 
 import soot.jimple.*;
 import soot.options.Options;
-import soot.toolkits.scalar.Pair;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
-import java.io.IOException;
+import java.io.*;
+import java.nio.channels.FileChannel;
 import java.util.*;
 
 import static java.lang.Thread.sleep;
 
 public class Main {
-    public static final String path = "/data/disk_16t_2/leiry/systemCode";
-    public static final String path_test = "/data/disk_16t_2/leiry/services.apk";
+    public static final String base_path = "/data/disk_16t_2/leiry/";
+    public static final String sourceCode_base_path = base_path + "android12/";
+    public static final String dexCode_path = base_path + "systemCode/";
+    public static final String javaCode_path = base_path + "javaCode/";
+    public static final String classCode_path = base_path + "classCode/";
+    public static final String path_test = base_path + "useful_file";
 
     public static List<String> call_path = new ArrayList<>();
     public static List<List<String>> call_paths = new ArrayList<>();
     public static Map<String, List<String>> methodToParents = new HashMap<String, List<String>>();
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        //sootInitial_test(path_test);
-        sootInitial(path);
+        Utils.printPartingLine("+");
+        System.out.println("Initializing...");
+        //sootInitial_java(classCode_path);
+        sootInitial_dex(dexCode_path);
+        System.out.println("Done.");
+        Utils.printPartingLine("+");
         Utils.initializeInterfaceClassesInfo();
         //test3();
+        //javaFileToClassFile(javaCode_path);
         //findEntries();
-        findSuspiciousDataStructures();
+        AnalysisForParsingClass.findSuspiciousDataStructures();
+        //AnalysisForUsingMethods.findSuspiciousMethods();
         //AnalysisForUsingMethods.getEntries();
         /*ElementInfo test = new ElementInfo();
         test6(test);
@@ -34,7 +44,7 @@ public class Main {
         System.out.println(test.getCaseIdToElement());*/
     }
 
-    private static void sootInitial(String apkPath) {
+    private static void sootInitial_dex(String code_path) {
         soot.G.reset();
         // android.jar包位置
         Options.v().set_force_android_jar("lib/android31.jar");
@@ -43,7 +53,7 @@ public class Main {
         // 该处测试用于apk，可注释
         Options.v().set_process_multiple_dex(true);
         // 以下不用管
-        Options.v().set_process_dir(Collections.singletonList(apkPath));
+        Options.v().set_process_dir(Collections.singletonList(code_path));
         Options.v().set_whole_program(true);
         Options.v().set_allow_phantom_refs(true);
         Options.v().set_output_format(Options.output_format_none);
@@ -51,11 +61,11 @@ public class Main {
         Scene.v().loadNecessaryClasses();
     }
 
-    private static void sootInitial_test(String javaPath) {
+    private static void sootInitial_java(String javaPath) {
         soot.G.reset();
         // android.jar包位置
         Options.v().set_force_android_jar("lib/android31.jar");
-        Options.v().set_src_prec(Options.src_prec_java);
+        Options.v().set_src_prec(Options.src_prec_class);
         // 以下不用管
         Options.v().set_process_dir(Collections.singletonList(javaPath));
         Options.v().set_whole_program(true);
@@ -67,7 +77,7 @@ public class Main {
 
     // analyse test.javad
     private static void test() {
-        sootInitial_test(path);
+        sootInitial_java(dexCode_path);
         //SootClass cls =Scene.v().getSootClassUnsafe("test");
         /*for(SootMethod sm : cls.getMethods()){
             *//*for(Unit unit: sm.retrieveActiveBody().getUnits()){
@@ -79,216 +89,65 @@ public class Main {
         }*/
     }
 
-
-    // find the methods related to the entry point
-    private static void findSuspiciousDataStructures() throws InterruptedException {
-        Log.deleteData(Log.element_data);
-        Log.deleteData(Log.method_data);
-        Log.deleteData(Log.analysis_data);
-        Log.deleteData(Log.suspicious_structures);
-
-
-        String[] skip_nms = {"\"android\"", "\"array\"", "\"singleInstancePerTask\""};
-        String[] skip_mds = {"append", "obtainAttributes", "skipCurrentTag", "unknownTag"};
-        String[] no_analysis_mds = {"max", "min", "create", "digit", "composeLongVersionCode", "computeMinSdkVersion", "computeTargetSdkVersion"};
-        String[] skip_cls = {"android.content.res.XmlResourceParser", "android.content.pm.parsing.result.ParseInput", "com.android.internal.util.AnnotationValidations", "android.util.Slog"};
-        String[] no_analysis_cls = {"com.android.internal.util.CollectionUtils", "android.text.TextUtils", "com.android.internal.util.ArrayUtils", "android.content.pm.parsing.FrameworkParsingPackageUtils"};
-        AnalysisForParsingClass.skip_names.addAll(new ArrayList<>(Arrays.asList(skip_nms)));
-        AnalysisForParsingClass.skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
-        AnalysisForParsingClass.no_analyzed_methods.addAll(new ArrayList<>(Arrays.asList(no_analysis_mds)));
-        AnalysisForParsingClass.skip_classes.addAll(new ArrayList<>(Arrays.asList(skip_cls)));
-        AnalysisForParsingClass.no_analyzed_classes.addAll(new ArrayList<>(Arrays.asList(no_analysis_cls)));
-
-        AnalysisForParsingClass.findEntryPoints();
-
-        List<Tainted> analyzed_tainted_points = new ArrayList<>();
-
-        while (!AnalysisForParsingClass.tainted_points.isEmpty()) {
-            Tainted tainted_point = AnalysisForParsingClass.tainted_points.poll();
-            SootMethod tainted_method = tainted_point.getMethod();
-            String tainted_element = tainted_point.getOuterElement();
-            List<Value> tainted_values = tainted_point.getTaintedValues();
-            int flag_analyzed = 0;
-
-            for(Tainted atp : analyzed_tainted_points){
-                if(atp.getMethod().equals(tainted_method) && atp.getTaintedValues().equals(tainted_values)) {
-                    flag_analyzed = 1; // This tainted method has been analyzed.
-                    tainted_point.setParameters(atp.getParameters()); // The same tainted methods have the same parameters.
-                    List<Pair<String, String>> e_ds = atp.getInnerElementAndStructure();
-                    tainted_point.setInnerElementsAndStructures(e_ds); // The same tainted methods have the same <element, structure>.
-                    if(e_ds != null) {
-                        for (Pair<String, String> e_d : e_ds) {
-                            String e = e_d.getO1();
-                            String d = e_d.getO2();
-                            String associated_element = AnalysisForParsingClass.getAssociatedElement(tainted_element, e); // This element is related to the tainted method and its parents.
-                            AnalysisForParsingClass.storeAssociatedElementAndCorrespondingDataStructure(associated_element, d);
-                        }
-                    }
-                    // If this method tainted other methods, store their information.
-                    Set<Tainted> children = atp.getTaintedChildren();
-                    tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
-                    if(children != null) {
-                        List<Tainted> parents = Utils.deepCopy(tainted_point.getParents());
-                        parents.add(tainted_point);
-                        for (Tainted child : children) {
-                            String element = child.getOuterElement(); // This element only associate with the tainted method.
-                            String associated_element = AnalysisForParsingClass.getAssociatedElement(tainted_element, element); // This element associate with the tainted method and its parents.
-                            AnalysisForParsingClass.tainted_points.offer(new Tainted(child.getMethod(), child.getTaintedValues(), associated_element, parents, child.getCallUnit()));
-                        }
-                    }
-                    break;
-                }
-            }
-
-            if(flag_analyzed==1) {
-                analyzed_tainted_points.add(tainted_point);
-                continue;
-            }
-
-            Log.logData(Log.analysis_data, Utils.generatePartingLine("#"));
-            Log.logData(Log.analysis_data, "+ Analyzed method: " + tainted_method);
-            Log.logData(Log.analysis_data, "+ Entry value: " + tainted_point.getTaintedValues());
-            analyzed_tainted_points.add(tainted_point);
-            AnalysisForParsingClass.dataFlowAnalysisForMethod(tainted_point);
-
-            //Utils.pause();
-            //sleep(2000);
-        }
-
-        for(Map.Entry<String, Set<String>> entry: AnalysisForParsingClass.associatedElementToDataStructures.entrySet()){
-            String associated_element = entry.getKey();
-            Log.logData(Log.element_data, Utils.generatePartingLine("="));
-            Log.logData(Log.element_data, "+ associated element: " + associated_element);
-            String out = entry.getKey()+",";
-            for(String ds : entry.getValue()){
-                Log.logData(Log.element_data, Utils.generatePartingLine("*"));
-                Log.logData(Log.element_data, "+ data structure: " + ds);
-                out += ds + ",";
-                if(ds!=null && ds.contains(".<") && ds.contains(AnalysisForParsingClass.parsedPackage_settings_class)) {
-                    String type = ds.split(" ")[1];
-                    if (type.contains("list") || type.contains("List") || type.contains("[]") || type.contains("Queue") || type.contains("Stack")) {
-                        Log.logData(Log.suspicious_structures, ds + "=>" + associated_element);
-                        for (Tainted point : analyzed_tainted_points) {
-                            List<Pair<String, String>> e_ds = point.getInnerElementAndStructure();
-                            for (Pair<String, String> e_d : e_ds) {
-                                String element = AnalysisForParsingClass.getAssociatedElement(point.getOuterElement(), e_d.getO1());
-                                if (associated_element.equals(element) && ds.equals(e_d.getO2())) {
-                                    Log.logData(Log.element_data, Utils.generatePartingLine("-"));
-                                    Log.logData(Log.element_data, "+ call path:");
-                                    for (Tainted parent : point.getParents()) {
-                                        Log.logData(Log.element_data, "--- " + parent.getMethod().getSignature());
-                                    }
-                                    Log.logData(Log.element_data, "---" + point.getMethod().getSignature());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            System.out.println(out);
-        }
-    }
-
-    public static void findSuspiciousMethods(){
-        String[] skip_mds = {"append", "size"};
-        String[] skip_cls = {"com.android.internal.util.AnnotationValidations", "android.util.Slog"};
-        AnalysisForUsingMethods.skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
-        AnalysisForUsingMethods.skip_classes.addAll(new ArrayList<>(Arrays.asList(skip_cls)));
-
-        Map<String, String> entryToElement = AnalysisForUsingMethods.getEntries();
-        AnalysisForUsingMethods.findEntryPoints(entryToElement);
-
-        List<Tainted> analyzed_tainted_points = new ArrayList<>();
-
-        while (!AnalysisForUsingMethods.tainted_points.isEmpty()) {
-            Tainted tainted_point = AnalysisForUsingMethods.tainted_points.poll();
-            SootMethod tainted_method = tainted_point.getMethod();
-            String tainted_element = tainted_point.getOuterElement();
-            List<Value> tainted_values = tainted_point.getTaintedValues();
-            int flag_analyzed = 0;
-
-            for (Tainted atp : analyzed_tainted_points) {
-                if (atp.getMethod().equals(tainted_method) && atp.getTaintedValues().equals(tainted_values)) {
-                    flag_analyzed = 1; // This tainted method has been analyzed.
-                    tainted_point.setParameters(atp.getParameters()); // The same tainted methods have the same parameters.
-                    List<String> structures = atp.getDataStructures();
-                    tainted_point.setDataStructures(structures); // The same tainted methods have the same data structures.
-                    if (structures != null) {
-                        for (String structure : structures) {
-                            AnalysisForUsingMethods.storeMethodAndElementAndCorrespondingDataStructure(tainted_method, tainted_element, structure);
-                        }
-                    }
-                    // If this method tainted other methods, store their information.
-                    Set<Tainted> children = atp.getTaintedChildren();
-                    tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
-                    if (children != null) {
-                        List<Tainted> parents = Utils.deepCopy(tainted_point.getParents());
-                        parents.add(tainted_point);
-                        for (Tainted child : children) {
-                            AnalysisForUsingMethods.tainted_points.offer(new Tainted(child.getMethod(), child.getTaintedValues(), tainted_element, parents, child.getCallUnit()));
-                        }
-                    }
-                    break;
-                }
-            }
-
-            if (flag_analyzed == 1) {
-                analyzed_tainted_points.add(tainted_point);
-                continue;
-            }
-
-            Log.logData(Log.analysis_data, Utils.generatePartingLine("#"));
-            Log.logData(Log.analysis_data, "+ Analyzed method: " + tainted_method);
-            Log.logData(Log.analysis_data, "+ Entry value: " + tainted_point.getTaintedValues());
-            analyzed_tainted_points.add(tainted_point);
-            AnalysisForUsingMethods.dataFlowAnalysisForMethod(tainted_point);
-
-            //Utils.pause();
-        }
+    public static void test1(){
     }
 
     // print body
     // given class name and method name
     public static void test2() {
-        String[] className = {"android.content.pm.parsing.ParsingPackageImpl",
+        String[] className = {
+                "com.android.server.pm.SharedUserSetting",
+                "androidx.appcompat.widget.SuggestionsAdapter",
+                "android.content.pm.parsing.ParsingPackageImpl",
                 "com.android.server.pm.PackageManagerService",
                 "android.content.pm.parsing.component.ParsedComponent",
                 "com.android.server.pm.parsing.pkg.PackageImpl",
                 "android.content.res.XmlBlock",
-                "com.android.server.pm.permission.PermissionManagerService"
+                "com.android.server.pm.permission.PermissionManagerService",
+                "android.content.pm.parsing.ParsingPackage",
+                "android.content.pm.parsing.PackageInfoWithoutStateUtils",
+                "com.android.server.pm.parsing"
         };
-        String[] methodName = {"getActivities", "addActivity", "preparePackageLI", "newParser", "revokeRuntimePermissionsIfGroupChangedInternal"};
-
-        //SootClass cls = Scene.v().getSootClassUnsafe(className[3]);
-        List<Body> bodies = Utils.getBodyOfMethod(className[5], methodName[4]);
-        Value v1 = null;
-        Value v2 = null;
+        String[] methodName = {"getActivities", "addActivity", "preparePackageLI", "newParser", "revokeRuntimePermissionsIfGroupChangedInternal",
+        "generateWithComponents", "PackageParserLegacyCoreTest", "addPackage"};
+        /*SootClass cls = Scene.v().getSootClassUnsafe(className[0]);
+        Map<String, String> entryToElement = AnalysisForUsingMethods.getEntries();
+        AnalysisForUsingMethods.test(cls, entryToElement);*/
+        //System.out.println(cls.getInterfaces());
+        List<Body> bodies = Utils.getBodyOfMethod(className[0], methodName[7]);
         for(Body b : bodies){
-            for(Unit u: b.getUnits()){
+            System.out.println(b);
+            /*for(Unit u: b.getUnits()){
                 if(u instanceof AssignStmt){
                     AssignStmt as = (AssignStmt) u;
                     InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
-                    if(ie!=null && ie.getMethod().getName().equals("getPermissions")){
-                        if(v1==null) {
-                            v1 = as.getRightOp();
-                        } else if(v2 == null){
-                            v2 = as.getRightOp();
-                        } else {
+                    if(ie!=null && ie.getMethod().getName().equals("getActivities")){
+                        System.out.println(ie);
+                        if(ie instanceof InterfaceInvokeExpr){
+                            InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) ie;
+                            SootMethod method = AnalysisForUsingMethods.getImplementedMethodOfAbstractMethod(null, ifi, null);
+                            System.out.println(method);
                             break;
                         }
                     }
                 }
-            }
+            }*/
         }
-        System.out.println(v1);
-        System.out.println(v2);
-        System.out.println(v1.equals(v2));
     }
 
     // print body
     // given method signature
     private static void test3() {
         String[] sigs = {
+                "<android.content.pm.parsing.PackageInfoWithoutStateUtils: android.content.pm.PackageInfo generateWithoutComponentsUnchecked(android.content.pm.parsing.ParsingPackageRead,int[],int,long,long,java.util.Set,android.content.pm.PackageUserState,int,android.apex.ApexInfo,android.content.pm.ApplicationInfo)>",
+                "<com.android.server.pm.AppsFilter: void lambda$removePackage$7$AppsFilter(com.android.server.pm.PackageSetting,android.util.ArrayMap,android.content.pm.UserInfo[])>",
+                "<android.widget.RemoteViews$BaseReflectionAction: void apply(android.view.View,android.view.ViewGroup,android.widget.RemoteViews$InteractionHandler,android.widget.RemoteViews$ColorResources)>",
+                "<com.android.server.trust.TrustAgentWrapper$2: void handleMessage(android.os.Message)>",
+                "<com.android.server.net.NetworkPolicyManagerService: void updateRulesForAppIdleParoleUL()>",
+                "<com.android.server.am.ActivityManagerShellCommand: int runStartActivity(java.io.PrintWriter)>",
+                "<com.android.server.appop.AppOpsService$2: void onReceive(android.content.Context,android.content.Intent)>",
+                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTag(java.lang.String,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
+                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addProperty(android.content.pm.PackageManager$Property)>",
                 "<com.android.server.pm.PackageManagerService: com.android.server.pm.PackageManagerService$PrepareResult preparePackageLI(com.android.server.pm.PackageManagerService$InstallArgs,com.android.server.pm.PackageManagerService$PackageInstalledInfo)>",
                 "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addActivity(android.content.pm.parsing.component.ParsedActivity)>",
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseProfileable(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
@@ -321,12 +180,30 @@ public class Main {
                 "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
-        String methodSig = sigs[1];
+        String methodSig = sigs[0];
         Body body = Utils.getBodyOfMethod(methodSig);
-        Map<Pair<SootMethod, String>, String> test = new HashMap<>();
-        Pair<SootMethod, String> a = new Pair<>(body.getMethod(), "TEST");
-        test.put(a, "A");
-        System.out.println(test.get(new Pair<SootMethod, String>(body.getMethod(), "TEST")));
+        System.out.println(body);
+        /*for(Unit u : body.getUnits()){
+            if(u instanceof DefinitionStmt){
+                System.out.println("+++"+u);
+            }
+            if(u instanceof AssignStmt){
+                System.out.println("---"+u);
+            }
+        }*/
+
+        //UnitGraph ug = new ExceptionalUnitGraph(body);
+        /*UnitGraph ug = new CompleteUnitGraph(body);
+        TestImpl test = new TestImpl(ug);
+        Unit unit = ug.getHeads().get(0);
+        while(true){
+            System.out.println(unit);
+            System.out.println(test.getFlowAfter(unit));
+            System.out.println(test.getFlowBefore(unit));
+            unit = body.getUnits().getSuccOf(unit);
+            if(unit == null) break;
+            Utils.pause();
+        }*/
         /*CompleteBlockGraph cbg = new CompleteBlockGraph(body);
         Graph.generatePathsFromBlock(cbg.getHeads().get(0));
         System.out.println(Graph.paths.size());
@@ -361,22 +238,95 @@ public class Main {
     }
 
     public static void test5() throws IOException, InterruptedException {
-        List<String> a= new ArrayList<>();
-        List<String> b = new ArrayList<>();
-        a.add("A");
-        b.add("A");
-        System.out.println(a.equals(b));
+        String framework_path = sourceCode_base_path+"frameworks";
+        String packages_path = sourceCode_base_path+"packages";
+        getJavaFiles(packages_path);
+        //copyFile(new File("src/Log.java"), "Log_copy.java");
+        //File f = new File("src/Log.java");
+        //System.out.println(f.getParent());
+        //createDir("/data/disk_16t_2/leiry/1/2/3");
+    }
+    public static void getJavaFiles(String file_path){
+        //System.out.println(file_path);
+        if(file_path == null) return;
+        File file = new File(file_path);
+        if (file.isFile()) {
+            if (file.getName().endsWith(".java")) {
+                String dest_path = file.getAbsolutePath().replace(sourceCode_base_path, javaCode_path);
+                System.out.println(dest_path);
+                copyFile(file, dest_path);
+            }
+        } else if (file.isDirectory()) {
+            File[] files = file.listFiles();
+            for (File f : files) {
+                getJavaFiles(f.getAbsolutePath());
+            }
+        }
+    }
+
+    public static void copyFile(File source, String dest_path){
+        try {
+            File dest = new File(dest_path);
+            createDir(dest.getParent());
+            FileChannel inputChannel = new FileInputStream(source).getChannel();
+            FileChannel outputChannel = new FileOutputStream(dest).getChannel();
+            outputChannel.transferFrom(inputChannel, 0, inputChannel.size());
+            inputChannel.close();
+            outputChannel.close();
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public static void createDir(String dir_path){
+        try {
+            File dir = new File(dir_path);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+    public static void javaFileToClassFile(String file_path){
+        try{
+            File file = new File(file_path);
+            if(file.isFile()){
+                if(!file_path.endsWith(".java")) return;
+                String dest_dir_path = file.getParent().replace(javaCode_path, classCode_path);
+                Runtime.getRuntime().exec("javac -d " + dest_dir_path + " " + file_path);
+            } else if(file.isDirectory()){
+                File[] files = file.listFiles();
+                for(File f : files){
+                    javaFileToClassFile(f.getAbsolutePath());
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
     public static void test6(){
-        /*List<String> a = new ArrayList<>();
-        a.add("A");
-        ElementInfo.no_analyzed_classes.addAll(a);
-        List<String> b = new ArrayList<>();
-        b.add("B");
-        Log.no_analyzed_classes.addAll(b);
-        System.out.println(ElementInfo.no_analyzed_classes);
-        System.out.println(Log.no_analyzed_classes);*/
-
+        List<String> data = Log.readData(AnalysisForParsingClass.analysis_data);
+        Set<String> methods = new HashSet<>();
+        for(int i= 0; i< data.size(); i++){
+            if(data.get(i).equals("--- Tainted callee.")){
+                int j = i;
+                while(true){
+                    j = j -1;
+                    if(data.get(j).startsWith("+ Unit:")){
+                        String method = data.get(j).split(".<")[1].split(">")[0];
+                        //System.out.println(method);
+                        methods.add(method);
+                        //Utils.pause();
+                        break;
+                    }
+                }
+            }
+        }
+        for(String method : methods){
+            System.out.println(method);
+        }
     }
 
 

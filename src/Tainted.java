@@ -100,10 +100,10 @@ public class Tainted {
     }
 
     public void storeInnerElementAndStructure(String element, String data_structure) {
-        Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
-        Log.logData(Log.analysis_data, "- Element: " + element);
-        Log.logData(Log.analysis_data, "- Data structure: " + data_structure);
-        Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
+        Log.logData(AnalysisForParsingClass.analysis_data, Utils.generatePartingLine("~"));
+        Log.logData(AnalysisForParsingClass.analysis_data, "- Element: " + element);
+        Log.logData(AnalysisForParsingClass.analysis_data, "- Data structure: " + data_structure);
+        Log.logData(AnalysisForParsingClass.analysis_data, Utils.generatePartingLine("~"));
 
 
         Pair<String, String> e_d = new Pair<String, String>(element, data_structure);
@@ -113,9 +113,9 @@ public class Tainted {
         if(!mInnerElementsAndStructures.contains(e_d)) { // Avoid duplicated logs.
             mInnerElementsAndStructures.add(e_d);
             // Log data.
-            Log.logData(Log.method_data, Utils.generatePartingLine("="));
-            Log.logData(Log.method_data, "+ Element: " + element);
-            Log.logData(Log.method_data, "+ Data structure: " + data_structure);
+            Log.logData(AnalysisForParsingClass.method_data, Utils.generatePartingLine("="));
+            Log.logData(AnalysisForParsingClass.method_data, "+ Element: " + element);
+            Log.logData(AnalysisForParsingClass.method_data, "+ Data structure: " + data_structure);
         }
     }
 
@@ -152,9 +152,9 @@ public class Tainted {
     }
 
     public void storeDataStructure(String structure){
-        Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
-        Log.logData(Log.analysis_data, "- Data structure: " + structure);
-        Log.logData(Log.analysis_data, Utils.generatePartingLine("~"));
+        Log.logData(AnalysisForUsingMethods.analysis_data, Utils.generatePartingLine("~"));
+        Log.logData(AnalysisForUsingMethods.analysis_data, "- Data structure: " + structure);
+        Log.logData(AnalysisForUsingMethods.analysis_data, Utils.generatePartingLine("~"));
 
         if(mDataStructures == null){
             mDataStructures = new ArrayList<>();
@@ -162,8 +162,8 @@ public class Tainted {
         if(!mDataStructures.contains(structure)){
             mDataStructures.add(structure);
             // Log.
-            Log.logData(Log.method_data, Utils.generatePartingLine("="));
-            Log.logData(Log.method_data, "+ Data structure: " + structure);
+            Log.logData(AnalysisForUsingMethods.method_data, Utils.generatePartingLine("="));
+            Log.logData(AnalysisForUsingMethods.method_data, "+ Data structure: " + structure);
         }
     }
 

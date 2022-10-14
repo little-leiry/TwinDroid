@@ -7,20 +7,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Log {
-
-    public static final String element_data = "logs/element_data.txt";
-    public static final String method_data = "logs/method_data.txt";
-
-    public static String analysis_data = "logs/analysis_data.txt";
-    public static String analysis_data2 = "logs/analysis_data2.txt";
-
-    public static String suspicious_structures = "logs/useful_structures.txt";
-
     public static PrintWriter analysis_pw;
 
-
-
     public static void logData(String file_path, String data){
+        if(file_path == null || data == null) return;
         try {
             File file = new File(file_path);
             if(!file.exists()){
@@ -37,6 +27,7 @@ public class Log {
     }
 
     public static void logBody(Body body){
+        if(body == null) return;
         SootMethod method = body.getMethod();
         int sig = method.getSignature().hashCode();
         String file_path = "methods/" + method.getName() + sig + ".txt";
@@ -52,6 +43,7 @@ public class Log {
     }
 
     public static void logCBG(CompleteBlockGraph cbg){
+        if(cbg == null) return;
         SootMethod method = cbg.getBody().getMethod();
         int sig = method.getSignature().hashCode();
         String file_path = "methods/block_" + method.getName() + sig + ".txt";
@@ -68,6 +60,7 @@ public class Log {
 
 
     public static void deleteData(String file_path){
+        if(file_path == null) return;
         try{
             File file = new File(file_path);
             if(!file.exists()) return;
@@ -81,6 +74,7 @@ public class Log {
     }
 
     public static void delete(String file_path){
+        if(file_path == null) return;
         File file = new File(file_path);
         if(!file.exists()) return;
         if(file.isFile()){
@@ -94,6 +88,7 @@ public class Log {
     }
 
     public static List<String> readData(String file_path){
+        if(file_path == null) return null;
         try {
             File file = new File(file_path);
             FileReader fr = new FileReader(file);

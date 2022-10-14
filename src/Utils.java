@@ -11,6 +11,7 @@ public class Utils {
 
     // One abstract class may be implemented by multiple classes.
     public static Map<SootClass, Set<SootClass>> interfaceClassToImplementedClasses = new HashMap<SootClass, Set<SootClass>>();
+    public static Map<SootClass, Set<SootClass>> interfaceClassToSubInterfaceClasses = new HashMap<SootClass, Set<SootClass>>();
     public Utils() {
     }
 
@@ -68,7 +69,12 @@ public class Utils {
         SootClass cls = Scene.v().getSootClassUnsafe(className);
         for (SootMethod sm : cls.getMethods()) {
             if (sm.getName().equals(methodName)) {
-                bodies.add(sm.retrieveActiveBody());
+                try {
+                    bodies.add(sm.retrieveActiveBody());
+                }catch(Exception e){
+                    e.printStackTrace();
+                    System.out.println(sm.getSignature());
+                }
             }
         }
         return bodies;
@@ -77,7 +83,12 @@ public class Utils {
     public static Body getBodyOfMethod(String signature) {
         SootMethod sm = Scene.v().getMethod(signature);
         if (sm.isConcrete()) {
-            return sm.retrieveActiveBody();
+            try {
+                return sm.retrieveActiveBody();
+            }catch (Exception e){
+                System.out.println(signature);
+                throw new RuntimeException(e);
+            }
         }
         return null;
     }
@@ -346,15 +357,25 @@ public class Utils {
 
     public static void initializeInterfaceClassesInfo(){
         for(SootClass cls : Scene.v().getClasses()){
-            if(cls.isInterface()) continue;
             for (SootClass interface_class : cls.getInterfaces()) {
-                Set<SootClass> implemented_classes = interfaceClassToImplementedClasses.get(interface_class);
-                if (implemented_classes == null) {
-                    implemented_classes = new HashSet<>();
-                    implemented_classes.add(cls);
-                    interfaceClassToImplementedClasses.put(interface_class, implemented_classes);
+                if(cls.isInterface()){
+                    Set<SootClass> extended_classes = interfaceClassToSubInterfaceClasses.get(interface_class);
+                    if(extended_classes==null){
+                        extended_classes = new HashSet<>();
+                        extended_classes.add(cls);
+                        interfaceClassToSubInterfaceClasses.put(interface_class, extended_classes);
+                    } else {
+                        extended_classes.add(cls);
+                    }
                 } else {
-                    implemented_classes.add(cls);
+                    Set<SootClass> implemented_classes = interfaceClassToImplementedClasses.get(interface_class);
+                    if (implemented_classes == null) {
+                        implemented_classes = new HashSet<>();
+                        implemented_classes.add(cls);
+                        interfaceClassToImplementedClasses.put(interface_class, implemented_classes);
+                    } else {
+                        implemented_classes.add(cls);
+                    }
                 }
             }
 
