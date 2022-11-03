@@ -1,3 +1,5 @@
+package analysis;
+
 import soot.Body;
 import soot.SootMethod;
 import soot.toolkits.graph.CompleteBlockGraph;

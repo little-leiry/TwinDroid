@@ -1,8 +1,11 @@
-import org.w3c.dom.ls.LSOutput;
+package analysis;
+
+import comparator.VBComparator;
 import soot.*;
 import soot.jimple.*;
 import soot.jimple.internal.ConditionExprBox;
 import soot.toolkits.graph.Block;
+import soot.toolkits.scalar.Pair;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -123,17 +126,32 @@ public class Analysis {
         return false;
     }
 
-    public static Value hasRedefinedValue(AssignStmt as, InvokeExpr ie, List<Value> tainted_values, Unit tainted_unit){
+    public static Value hasRedefinedValue(AssignStmt as, InvokeExpr ie, List<Value> tainted_values, Unit tainted_unit,
+                                          Set<AssignStmt> entry_assigns, Map<Value, String> valueToField){
 
         Value v = Utils.hasLeftValueOfAssignStmt(as, tainted_values);
         if (v != null) {
-            if (tainted_unit != null && as.toString().equals(tainted_unit.toString())) return null;
+            if(entry_assigns!=null && entry_assigns.contains(as))
+                return null;
+
+            if (tainted_unit != null && as.toString().equals(tainted_unit.toString()))
+                return null;
+
 
             if (ie != null && ie.getMethod().getDeclaringClass().toString().equals("android.content.pm.parsing.result.ParseInput"))
                 return null;
 
             if(v.getType().toString().equals("boolean")){
                 if(as.getUseBoxes().size()==1 && (as.getRightOp() instanceof IntConstant)){ // Assign 0 or 1 to this boolean value directly.
+                    return null;
+                }
+            }
+            // For the tainted value related to a field,
+            // when it is passed in a method as a parameter,
+            // this value may be reassigned this field first.
+            String field = getField(as);
+            if(field!=null && valueToField.containsKey(as.getLeftOp())){
+                if(valueToField.get(as.getLeftOp()).equals(field)){
                     return null;
                 }
             }
@@ -174,26 +192,93 @@ public class Analysis {
         return  null;
     }
 
-    public static String confirmTaintedItemOfMap(String method_name, Set<Integer> tainted_param_indices){
-        System.out.println("Map: " + method_name + " => " + tainted_param_indices);
+    public static String confirmTaintedItemOfTaintedMap(String method_name, InvokeExpr ie, Set<Integer> tainted_param_indices,
+                                                        List<Unit> tainted_units, Map<Value, String> taintedValueToTaintedItem){
         if(method_name == null || tainted_param_indices == null) {
             return null;
         }
-        String item = "";
+        String item = "_map";
+        // For putAll(map), addAll(map)
+        if(method_name.endsWith("All")){
+            Value bridge = ie.getArg(0);
+            if(taintedValueToTaintedItem.containsKey(bridge)){
+                item = taintedValueToTaintedItem.get(bridge);
+            } else {
+                item += "_null";
+            }
+            return item;
+        }
+        // For put(key, value), add(map, key, value)
+        int flag_key = 0;
+        int flag_value = 0;
         if(method_name.equals("add")){
             if(tainted_param_indices.contains(1)){
-                item += "_key";
+                flag_key = 1;
             }
             if(tainted_param_indices.contains(2)){
-                item += "_value";
+                flag_value = 1;
             }
         } else if(method_name.equals("put")){
             if(tainted_param_indices.contains(0)){
-                item += "_key";
+                flag_key = 1;
             }
             if(tainted_param_indices.contains(1)){
-                item += "_value";
+                flag_value = 1;
             }
+        }
+        if(flag_key == 1) {
+            Value key = method_name.equals("add")? ie.getArg(1) : ie.getArg(0);
+            int flag_name = 0;
+            int flag_map = 0;
+            for (int i = tainted_units.size(); i > 0; i--) {
+                Unit tainted_unit = tainted_units.get(i - 1);
+                if (tainted_unit instanceof AssignStmt) {
+                    AssignStmt tainted_as = (AssignStmt) tainted_unit;
+                    if (tainted_as.getLeftOp().equals(key)) {
+                        InvokeExpr tainted_ie = Utils.getInvokeOfAssignStmt(tainted_as);
+                        String right_op = tainted_as.getRightOp().toString();
+                        if (tainted_ie == null) {
+                            if (tainted_as.getRightOp().getUseBoxes().isEmpty()) {
+                                key = tainted_as.getRightOp();
+                            } else if (right_op.startsWith("(")) {
+                                key = tainted_as.getUseBoxes().get(1).getValue();
+                            } else if (right_op.contains(".<") && right_op.endsWith("name>")) {
+                                flag_name = 1;
+                            }
+                        } else {
+                            String name = tainted_ie.getMethod().getName();
+                            if (name.equals("getKey") ) {
+                                flag_map = 1;
+                                continue;
+                            }
+                            if (flag_map == 1) {
+                                if (!name.equals("put") && !name.equals("add")) {
+                                    continue;
+                                }
+                                key = name.equals("put") ? tainted_ie.getArg(0) : tainted_ie.getArg(1);
+                                flag_map = 0;
+                                continue;
+                            }
+                            if (name.equals("getName")) {
+                                flag_name = 1;
+                            } else if (!tainted_ie.getArgs().isEmpty() && tainted_ie.getArg(0).toString().equals("0")) {
+                                flag_name = 1;
+                            }
+                        }
+                    }
+                }
+                if(flag_name == 1){
+                    break;
+                }
+            }
+            if (flag_name == 1){
+                item += "_key(name)";
+            }else {
+                item += "_key";
+            }
+        }
+        if(flag_value == 1){
+            item += "_value";
         }
         return item;
     }
@@ -224,28 +309,58 @@ public class Analysis {
         return null;
     }
 
-    public static String getDataStructure(Value data_structure, Map<Value, String> mapValueToTaintedItem){
-        if (data_structure == null) {
+    public static String getDataStructure(Value tainted_value, Map<Value, String> taintedMapValueToTaintedItem,
+                                          Map<Value, String> valueToField, Set<Value> tainted_attributes,
+                                          Value return_value, int flag_remove){
+        if (tainted_value == null) {
             return null;
         }
-        String structure;
-        if (data_structure.toString().contains(".<")) {
-            structure = data_structure.toString();
-        } else {
-            structure = data_structure.getType().toString();
+        // For the value put into an array, the final data structure should be the array.
+        if(tainted_value.getUseBoxes().size() == 2 && tainted_value.toString().contains("[")){
+            tainted_value = tainted_value.getUseBoxes().get(0).getValue();
         }
-        if(structure.contains("Map")){ // For the Map value, we need know whether the key or value is tainted.
-            String item = mapValueToTaintedItem.get(data_structure);
+        String structure;
+        // If the data structure is a field, store the whole field information.
+        if (tainted_value.toString().contains(".<")) {
+            structure = "<" + tainted_value.toString().split(".<")[1];
+        } else if (valueToField.containsKey(tainted_value)) {
+            structure = valueToField.get(tainted_value);
+        } else {
+            structure = tainted_value.getType().toString();
+        }
+        if(tainted_attributes!=null && tainted_attributes.contains(tainted_value)){
+            structure += "_attribute";
+        }
+        if(tainted_value.equals(return_value)){
+            structure += "_return";
+        }
+        if(flag_remove==1){
+            structure += "_remove";
+        }
+        if(Utils.isMapValue(tainted_value)){ // For the Map value, we need know whether the key or value is tainted.
+            String item = taintedMapValueToTaintedItem.get(tainted_value);
             if(item!=null) {
                 structure += item;
-            }else{
+            }else if(flag_remove==0){
                 Utils.printPartingLine("!");
-                System.out.println("Cannot find the tainted item of the Map value: " + data_structure);
+                System.out.println("Cannot find the tainted item of the Map value: " + tainted_value);
                 Utils.printPartingLine("!");
                 exit(0);
             }
         }
         return structure;
+    }
+
+    public static String getField(AssignStmt as){
+        InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+        if(ie==null && as.getUseBoxes().size()==2){
+            String right_op = as.getRightOp().toString();
+            if(right_op.contains(".<")){
+                String field = "<" + right_op.split(".<")[1];
+                return field;
+            }
+        }
+        return null;
     }
 
     public static SootMethod getImplementedMethodOfAbstractMethod(String log_file, InterfaceInvokeExpr ifi, Tainted tainted_point){
@@ -288,7 +403,7 @@ public class Analysis {
             Utils.printPartingLine("!");
             System.out.println("Special abstract class. Cannot find the implemented class of " + interface_cls.getName());
             Utils.printPartingLine("!");
-            return null;
+            exit(0);
         }
 
         SootClass implemented_cls = null;
@@ -301,12 +416,17 @@ public class Analysis {
             int flag_found = 0;
             if (base != null && tainted_point != null) {
                 List<Tainted> path = Utils.deepCopy(tainted_point.getParents());
-                path.add(tainted_point);
                 // Find the creation of the base value to confirm the implemented class.
                 for (int i = path.size(); i > 0; i--) {
                     Tainted point = path.get(i - 1);
                     Map<Value, Integer> parameters = point.getParameters();
-                    if (parameters != null && parameters.get(base) != null) { // If the base is a parameter of the method, we need analyze its parent.
+                    if(parameters == null){
+                        Utils.printPartingLine("!");
+                        System.out.println("Cannot find the parameters of the method: " + point.getMethod());
+                        Utils.printPartingLine("!");
+                        exit(0);
+                    }
+                    if (parameters.get(base) != null) { // If the base is a parameter of the method, we need analyze its parent.
                         if (i - 1 > 0) {
                             // Transform the base value.
                             Body body = path.get(i - 2).getMethod().retrieveActiveBody();
@@ -378,7 +498,48 @@ public class Analysis {
         Utils.printPartingLine("!");
         System.out.println("Special abstract method. Cannot find the implemented method of " + abstract_method.getSignature());
         Utils.printPartingLine("!");
+        exit(0);
         return null;
+    }
+
+    public static String generateTaintedPointSignature(Tainted tainted_point){
+        if(tainted_point == null) return null;
+        SootMethod tainted_method = tainted_point.getMethod();
+        Set<Integer> tainted_param_indices = tainted_point.getTaintedParamIndices();
+        List<Value> tainted_values = tainted_point.getTaintedValues();
+        Map<Integer, String> tainted_mapItem = tainted_point.getTaintedMapItem();
+        String sig = tainted_method.getSignature();
+        if(tainted_param_indices!=null){
+            sig+=tainted_param_indices.toString();
+        }
+        if(tainted_values!=null){
+            sig+=tainted_values.toString();
+        }
+        if(tainted_mapItem!=null){
+            sig+=tainted_mapItem.toString();
+        }
+        return sig;
+    }
+    public static void storeValueAndCorrespondingField(AssignStmt as, Map<Value, String> valueToField){
+        String field = getField(as);
+        if(field!=null){ // $r1 = $r6.<android.content.pm.PackageInfo: android.content.pm.ActivityInfo[] activities>
+            valueToField.put(as.getLeftOp(), field);
+        } else if (as.getUseBoxes().size() == 1){ // $r2 = $r1
+            Value left_op = as.getLeftOp();
+            Value right_op = as.getRightOp();
+            if(valueToField.containsKey(right_op)){
+                field = valueToField.get(right_op);
+                valueToField.put(left_op, field);
+            } else if(valueToField.containsKey(left_op)){ // This value is re-defined.
+                valueToField.remove(left_op);
+            }
+        } else if(valueToField.containsKey(as.getLeftOp())){ // This value is re-defined.
+            InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+            if(ie!=null && ie.getArgs().contains(as.getLeftOp())){
+                return;
+            }
+            valueToField.remove(as.getLeftOp());
+        }
     }
 
     // Store the byte value's concrete assignment.
@@ -448,7 +609,7 @@ public class Analysis {
     public static void storeNewValueAndCorrespondingCopy(AssignStmt as, Map<Value, Value> newValueToCopy){
         if(as == null) return;
 
-        if(Utils.isNewStmt(as)) {
+        if(Utils.isNewStmt(as)) { // $r1 = new
             Value new_value = as.getLeftOp();
             newValueToCopy.put(new_value, null);
         } else if(Utils.hasCopyOfValues(as, new ArrayList<>(newValueToCopy.keySet()))){
@@ -463,6 +624,8 @@ public class Analysis {
                 Utils.printPartingLine("!");
                 exit(0);
             }
+        } else if(newValueToCopy.containsKey(as.getLeftOp())){ // This value is re-defined.
+            newValueToCopy.remove(as.getLeftOp());
         }
     }
 
@@ -476,13 +639,21 @@ public class Analysis {
         }
     }
 
-    public static void storeMapValueAndCorrespondingTaintedItem(Value map_value, String tainted_item, Map<Value, String> mapValueToTaintedItem, Map<Value, Value>newValueToCopy){
-        mapValueToTaintedItem.put(map_value, tainted_item);
-        if(!map_value.getUseBoxes().isEmpty()){
-            map_value = map_value.getUseBoxes().get(0).getValue();
+    public static void storeTaintedMapValueAndCorrespondingTaintedItem(Value tainted_map_value, String tainted_map_item, Map<Value, String> taintedMapValueToTaintedItem, Map<Value, Value>newValueToCopy){
+        if(tainted_map_value==null || tainted_map_item == null){
+            Utils.printPartingLine("!");
+            System.out.println("Null value!");
+            System.out.println("Map value: " + tainted_map_value);
+            System.out.println("analysis.Tainted item: " + tainted_map_item);
+            Utils.printPartingLine("!");
+            exit(0);
         }
-        if(newValueToCopy.containsKey(map_value)){
-            mapValueToTaintedItem.put(newValueToCopy.get(map_value), tainted_item);
+        taintedMapValueToTaintedItem.put(tainted_map_value, tainted_map_item);
+        if(!tainted_map_value.getUseBoxes().isEmpty()){
+            tainted_map_value = tainted_map_value.getUseBoxes().get(0).getValue();
+        }
+        if(newValueToCopy.containsKey(tainted_map_value)){
+            taintedMapValueToTaintedItem.put(newValueToCopy.get(tainted_map_value), tainted_map_item);
         }
     }
 
@@ -513,6 +684,71 @@ public class Analysis {
         Value copy = newValueToCopy.get(new_tainted_value);
         if(copy!=null){
             tainted_values.add(copy);
+        }
+    }
+
+
+
+    // Update the Map value information.
+    // When a Map value is assigned to another Map value -- r0.<android.content.pm.parsing.ParsingPackageImpl: java.util.Map processes> = r1
+    // Or an Object value is transformed to a Map value -- $r7 = (java.util.Map) $r6
+    public static void updateTaintedMapValueInfo(AssignStmt as, InvokeExpr ie, List<Unit> tainted_units, Map<Value, String> taintedMapValueToTaintedItem,
+                                                 Map<Value, Value> newValueToCopy){
+        if(as == null || taintedMapValueToTaintedItem == null) return;
+
+        if(Utils.isMapValue(as.getLeftOp())){
+            String tainted_map_item = null;
+            if(ie==null) {
+                Value right_op = as.getRightOp();
+                if (right_op.getUseBoxes().isEmpty()) {
+                    tainted_map_item = taintedMapValueToTaintedItem.get(right_op);
+                } else if (right_op.toString().startsWith("(")) { // In general, this situation involves a method return value.
+                    Value bridge_value = as.getUseBoxes().get(1).getValue();
+                    for (int i = tainted_units.size(); i > 0 ; i--) {
+                        Unit tainted_unit = tainted_units.get(i-1);
+                        if(tainted_unit instanceof AssignStmt){
+                            AssignStmt tainted_as = (AssignStmt) tainted_unit;
+                            if(tainted_as.getLeftOp().equals(bridge_value)){
+                                InvokeExpr tainted_ie = Utils.getInvokeOfAssignStmt(tainted_as);
+                                if(tainted_ie == null){
+                                    continue;
+                                }
+                                if(tainted_ie.getMethod().getName().equals("getResult")){
+                                    bridge_value = ((InterfaceInvokeExpr) tainted_ie).getBase();
+                                    continue;
+                                }
+                                SootMethod tainted_method = tainted_ie.getMethod();
+                                if(tainted_method.getName().equals("get")){
+                                    Value map_value = Utils.getBaseOfInvokeExpr(tainted_ie);
+                                    if(taintedMapValueToTaintedItem.containsKey(map_value)){
+                                        tainted_map_item = taintedMapValueToTaintedItem.get(map_value);
+                                        if(tainted_map_item.contains("_value")){
+                                            tainted_map_item = "_map_value";
+                                        }
+                                    } else {
+                                        tainted_map_item = "_map_null";
+                                    }
+                                }else {
+                                    tainted_map_item = "_map_unknown(" + tainted_method.getSignature() + ")";
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else if("add_put".contains(ie.getMethod().getName())){
+                return;
+            } else {
+                tainted_map_item = "_map_unknown(" + ie.getMethod().getSignature() + ")";
+            }
+            if(tainted_map_item != null){
+                storeTaintedMapValueAndCorrespondingTaintedItem(as.getLeftOp(), tainted_map_item, taintedMapValueToTaintedItem, newValueToCopy);
+            } else{
+                Utils.printPartingLine("!");
+                System.out.println("Cannot confirm the tainted map item: " + as);
+                Utils.printPartingLine("!");
+                exit(0);
+            }
         }
     }
 }

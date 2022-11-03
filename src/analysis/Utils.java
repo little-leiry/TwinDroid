@@ -1,8 +1,11 @@
+package analysis;
+
 import soot.*;
 import soot.jimple.*;
+import soot.toolkits.graph.Block;
 
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
+import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -93,29 +96,18 @@ public class Utils {
         return null;
     }
 
-    public static Value getParameterOfMethod(SootMethod method, Integer parameter_index) {
-        if(method == null) return null;
-        Value parameter = null;
-        if(method.isConcrete()){
-            Body body = method.retrieveActiveBody();
-            Log.logBody(body);
-            for(Unit unit:body.getUnits()){
-                if(unit instanceof IdentityStmt){
-                    IdentityStmt is = (IdentityStmt) unit;
-                    if(is.getRightOp().toString().contains("@parameter" + parameter_index.toString())){
-                        parameter = is.getLeftOp();
-                        return parameter;
-                    }
+    public static Value getParameterOfMethod(Body body, Integer parameter_index) {
+        if(body == null) return null;
+
+        for(Unit unit:body.getUnits()){
+            if(unit instanceof IdentityStmt){
+                IdentityStmt is = (IdentityStmt) unit;
+                if(is.getRightOp().toString().contains("@parameter" + parameter_index.toString())){
+                    return is.getLeftOp();
                 }
             }
-        } else if(method.isNative()){
-            Utils.printPartingLine("+");
-            System.out.println("Native method.");
-        } else if(method.isPhantom()){
-            Utils.printPartingLine("+");
-            System.out.println("Phantom method");
         }
-        return parameter;
+        return null;
     }
 
     public static int getIndexOfUnit(Body body, Unit unit){
@@ -155,28 +147,30 @@ public class Utils {
 
     // Judge whether a value:
     // 1) is one of the assignment's use values and
-    // 2) this value does not appear in the left of the assignment.
+    // 2) this value appears in the right of the assignment.
     public static boolean isRightValueOfAssignStmt(AssignStmt as, Value v) {
         if(as == null || v == null) return false;
-        if(!v.getUseBoxes().isEmpty()){
-            v = v.getUseBoxes().get(0).getValue();
+
+        // Data pre-processing.
+        InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+        if(ie!=null) {
+            if (!v.getUseBoxes().isEmpty()) {
+                v = v.getUseBoxes().get(0).getValue();
+            }
         }
+
         List<ValueBox> vbs = as.getUseBoxes();
-        Value left_op = as.getLeftOp();
         for (ValueBox vb : vbs) {
             Value use_value = vb.getValue();
-            if (use_value.equals(v)) {
-                if (left_op.getUseBoxes().isEmpty()) {
-                    return true;
-                } else if (!left_op.toString().contains(v.toString())) {
-                    return true;
-                }
+            if (use_value.equals(v) &&
+                    as.getRightOp().toString().contains(v.toString())) {
+                return true;
             }
         }
         return false;
     }
 
-    public static List<Value> hasRightValueOfAssignStmt(AssignStmt as, List<Value> values) {
+    public static List<Value> hasRightValuesOfAssignStmt(AssignStmt as, List<Value> values) {
         List<Value> result = new ArrayList<>();
         if(as == null || values == null) return result;
         for(Value v : values){
@@ -187,14 +181,40 @@ public class Utils {
         return result;
     }
 
-    public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
-        if(as==null || v == null) return false;
-
-        if(as.getLeftOp().equals(v)) return true;
-
+    public static boolean isUseValueOfInvokeStmt(InvokeStmt is, Value v) {
+        if(is == null || v == null) return false;
         if(!v.getUseBoxes().isEmpty()){
             v = v.getUseBoxes().get(0).getValue();
         }
+        List<ValueBox> vbs = is.getUseBoxes();
+        for (ValueBox vb : vbs) {
+            Value use_value = vb.getValue();
+            if (use_value.equals(v)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static List<Value> hasUseValuesOfInvokeStmt(InvokeStmt is, List<Value> values) {
+        List<Value> result = new ArrayList<>();
+        if(is == null || values == null) return result;
+        for(Value v : values){
+            if(isUseValueOfInvokeStmt(is, v)){
+                result.add(v);
+            }
+        }
+        return result;
+    }
+
+    public static boolean isLeftValueOfAssignStmt(AssignStmt as, Value v){
+        if(as==null || v == null) return false;
+
+        // Data pre-processing.
+        if(!v.getUseBoxes().isEmpty()){
+            v = v.getUseBoxes().get(0).getValue();
+        }
+
         if(as.getLeftOp().equals(v)) return true;
         return false;
     }
@@ -209,11 +229,14 @@ public class Utils {
         return null;
     }
 
-    public static int isParameterOfInvokeStmt(InvokeExpr i, Value v) {
+    public static int isParameterOfInvokeExpr(InvokeExpr i, Value v) {
         if(i == null || v == null) return -1;
+
+        // Data pre-processing.
         if(!v.getUseBoxes().isEmpty()){
             v = v.getUseBoxes().get(0).getValue();
         }
+
         List<Value> parameters = i.getArgs();
         if (parameters.contains(v)) {
             return parameters.indexOf(v);
@@ -221,18 +244,31 @@ public class Utils {
         return -1;
     }
 
-    public static List<Value> hasParameterOfInvokeStmt(InvokeExpr i, List<Value> values) {
+    public static List<Value> hasParametersOfInvokeExpr(InvokeExpr i, List<Value> values) {
         List<Value> result = new ArrayList<>();
         if(i == null || values == null) return result;
         for(Value v : values){
-            if(isParameterOfInvokeStmt(i, v)!= -1) {
+            if(isParameterOfInvokeExpr(i, v)!= -1) {
                 result.add(v);
             }
         }
         return result;
     }
 
-    // r7 = r4, r7 = (String) r4
+    public static boolean isCopyStmt(AssignStmt as){
+        if(as == null) return false;
+        InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+        if(ie == null && as.getUseBoxes().size() == 1){
+            String right_value_type = as.getRightOp().getType().toString();
+            String left_value_type = as.getLeftOp().getType().toString();
+            if(right_value_type.equals(left_value_type)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // r7 = r4
     // r7 is a copy of r4
     public static boolean isCopyOfValue(AssignStmt as, Value value){
         if(as==null || value == null) return false;
@@ -240,8 +276,10 @@ public class Utils {
         List<ValueBox> vbs = as.getUseBoxes();
         // There is a copy of value.
         if(vbs.size()==1 && ie == null){
-            Value use_value = as.getRightOp();
-            if(value.equals(use_value)){
+            Value right_value = as.getRightOp();
+            Value left_value = as.getLeftOp();
+            if(value.equals(right_value) &&
+                    value.getType().equals(left_value.getType())){
                 return true;
             }
         }
@@ -252,6 +290,34 @@ public class Utils {
         if(as==null || values == null) return false;
         for(Value v : values){
             if(isCopyOfValue(as, v) == true) return true;
+        }
+        return false;
+    }
+
+    public static boolean isMapValue(Value v){
+        if(v==null) return false;
+        String type = v.getType().toString();
+        if(type.endsWith("Map") || type.endsWith("SparseArray")){
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean isListValue(Value v){
+        if(v==null) return false;
+        String type = v.getType().toString();
+        if(type.endsWith("List")){
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean hasMapValue(List<Value> values){
+        if(values == null) return false;
+        for(Value v : values){
+            if(isMapValue(v)){
+                return true;
+            }
         }
         return false;
     }
@@ -382,6 +448,17 @@ public class Utils {
         }
     }
 
+    public static <T> Set<T> deepCopy(Set<T> src){
+        Set<T> dest = new HashSet<>();
+        if(src==null){
+            return dest;
+        }
+        for(T object : src){
+            dest.add(object);
+        }
+        return dest;
+    }
+
     public static <T> List<T> deepCopy(List<T> src) {
         List<T> dest = new ArrayList<>();
         if(src == null){
@@ -410,6 +487,33 @@ public class Utils {
             char in = (char) System.in.read();
         } catch (IOException e){
             e.printStackTrace();
+        }
+    }
+
+    public static void createDir(String dir_path){
+        try {
+            File dir = new File(dir_path);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void copyFile(File source, String dest_path){
+        try {
+            File dest = new File(dest_path);
+            createDir(dest.getParent());
+            FileChannel inputChannel = new FileInputStream(source).getChannel();
+            FileChannel outputChannel = new FileOutputStream(dest).getChannel();
+            outputChannel.transferFrom(inputChannel, 0, inputChannel.size());
+            inputChannel.close();
+            outputChannel.close();
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

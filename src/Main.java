@@ -1,19 +1,26 @@
+import analysis.*;
+import comparator.StringComparator;
+import comparator.VBComparator;
+import graph.Graph;
+import org.apache.commons.collections4.CollectionUtils;
 import soot.*;
 
 import soot.jimple.*;
 import soot.options.Options;
+import soot.toolkits.graph.Block;
+import soot.toolkits.graph.CompleteBlockGraph;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import java.io.*;
-import java.nio.channels.FileChannel;
 import java.util.*;
 
+import static java.lang.Thread.activeCount;
 import static java.lang.Thread.sleep;
 
 public class Main {
-    public static final String base_path = "/data/disk_16t_2/leiry/";
+    public static final String base_path = "/data/disk_16t_2/leiry/android12_source/";
     public static final String sourceCode_base_path = base_path + "android12/";
     public static final String dexCode_path = base_path + "systemCode/";
     public static final String javaCode_path = base_path + "javaCode/";
@@ -26,18 +33,22 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         Utils.printPartingLine("+");
-        System.out.println("Initializing...");
+        System.out.println("Initializing classes...");
         //sootInitial_java(classCode_path);
         sootInitial_dex(dexCode_path);
         System.out.println("Done.");
         Utils.printPartingLine("+");
+        System.out.println("Initializing interface classes information...");
         Utils.initializeInterfaceClassesInfo();
-        //test3();
+        System.out.println("Done");
+        Utils.printPartingLine("+");
+        //test4();
         //javaFileToClassFile(javaCode_path);
         //findEntries();
-        AnalysisForParsingClass.findSuspiciousDataStructures();
-        //AnalysisForUsingMethods.findSuspiciousMethods();
-        //AnalysisForUsingMethods.getEntries();
+        //AnalysisForParsingClass.findSuspiciousDataStructures();
+        AnalysisForUsingMethods.findSuspiciousMethods();
+        //AnalysisForUsingMethods.getEntryBridges();
+        //AnalysisForParsingClass2.findSuspiciousDataStructures();
         /*ElementInfo test = new ElementInfo();
         test6(test);
         System.out.println(test.getCaseNum());
@@ -111,8 +122,8 @@ public class Main {
         String[] methodName = {"getActivities", "addActivity", "preparePackageLI", "newParser", "revokeRuntimePermissionsIfGroupChangedInternal",
         "generateWithComponents", "PackageParserLegacyCoreTest", "addPackage"};
         /*SootClass cls = Scene.v().getSootClassUnsafe(className[0]);
-        Map<String, String> entryToElement = AnalysisForUsingMethods.getEntries();
-        AnalysisForUsingMethods.test(cls, entryToElement);*/
+        Map<String, String> entryToElement = analysis.AnalysisForUsingMethods.getEntries();
+        analysis.AnalysisForUsingMethods.test(cls, entryToElement);*/
         //System.out.println(cls.getInterfaces());
         List<Body> bodies = Utils.getBodyOfMethod(className[0], methodName[7]);
         for(Body b : bodies){
@@ -120,12 +131,12 @@ public class Main {
             /*for(Unit u: b.getUnits()){
                 if(u instanceof AssignStmt){
                     AssignStmt as = (AssignStmt) u;
-                    InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+                    InvokeExpr ie = analysis.Utils.getInvokeOfAssignStmt(as);
                     if(ie!=null && ie.getMethod().getName().equals("getActivities")){
                         System.out.println(ie);
                         if(ie instanceof InterfaceInvokeExpr){
                             InterfaceInvokeExpr ifi = (InterfaceInvokeExpr) ie;
-                            SootMethod method = AnalysisForUsingMethods.getImplementedMethodOfAbstractMethod(null, ifi, null);
+                            SootMethod method = analysis.AnalysisForUsingMethods.getImplementedMethodOfAbstractMethod(null, ifi, null);
                             System.out.println(method);
                             break;
                         }
@@ -139,62 +150,25 @@ public class Main {
     // given method signature
     private static void test3() {
         String[] sigs = {
-                "<android.content.pm.parsing.PackageInfoWithoutStateUtils: android.content.pm.PackageInfo generateWithoutComponentsUnchecked(android.content.pm.parsing.ParsingPackageRead,int[],int,long,long,java.util.Set,android.content.pm.PackageUserState,int,android.apex.ApexInfo,android.content.pm.ApplicationInfo)>",
-                "<com.android.server.pm.AppsFilter: void lambda$removePackage$7$AppsFilter(com.android.server.pm.PackageSetting,android.util.ArrayMap,android.content.pm.UserInfo[])>",
-                "<android.widget.RemoteViews$BaseReflectionAction: void apply(android.view.View,android.view.ViewGroup,android.widget.RemoteViews$InteractionHandler,android.widget.RemoteViews$ColorResources)>",
-                "<com.android.server.trust.TrustAgentWrapper$2: void handleMessage(android.os.Message)>",
-                "<com.android.server.net.NetworkPolicyManagerService: void updateRulesForAppIdleParoleUL()>",
-                "<com.android.server.am.ActivityManagerShellCommand: int runStartActivity(java.io.PrintWriter)>",
-                "<com.android.server.appop.AppOpsService$2: void onReceive(android.content.Context,android.content.Intent)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTag(java.lang.String,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
-                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addProperty(android.content.pm.PackageManager$Property)>",
-                "<com.android.server.pm.PackageManagerService: com.android.server.pm.PackageManagerService$PrepareResult preparePackageLI(com.android.server.pm.PackageManagerService$InstallArgs,com.android.server.pm.PackageManagerService$PackageInstalledInfo)>",
-                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addActivity(android.content.pm.parsing.component.ParsedActivity)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseProfileable(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseDenyPermission(java.util.Set,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseRestrictUpdateHash(int,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseKeySets(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.component.ParsedProviderUtils: android.content.pm.parsing.result.ParseResult parseGrantUriPermission(android.content.pm.parsing.component.ParsedProvider,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseUsesPermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseKeySets(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseUsesSdk(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseUsesPermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.component.ParsedIntentInfoUtils: android.content.pm.parsing.result.ParseResult parseData(android.content.pm.parsing.component.ParsedIntentInfo,android.content.res.Resources,android.content.res.XmlResourceParser,boolean,android.content.pm.parsing.result.ParseInput)>",
-                "<android.content.IntentFilter: void addDataType(java.lang.String)>",
-                "<android.content.IntentFilter: void processMimeType(java.lang.String,java.util.function.BiConsumer)>",
-                "<android.content.pm.parsing.component.ParsedProviderUtils: android.content.pm.parsing.result.ParseResult parseGrantUriPermission(android.content.pm.parsing.component.ParsedProvider,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
-                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl setMetaData(android.os.Bundle)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseRestrictUpdateHash(int,android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.component.ParsedProviderUtils: android.content.pm.parsing.result.ParseResult parseGrantUriPermission(android.content.pm.parsing.component.ParsedProvider,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,android.content.pm.parsing.result.ParseInput)>",
-                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl setMetaData(android.os.Bundle)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseUsesStaticLibrary(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
-                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl addUsesStaticLibraryCertDigests(java.lang.String[])>",
-                "<java.lang.System: void arraycopy(java.lang.Object,int,java.lang.Object,int,int)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApplication(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseSplitApplication(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,int)>",
-                "<android.content.pm.parsing.ParsingPackageImpl: android.content.pm.parsing.ParsingPackageImpl setSigningDetails(android.content.pm.PackageParser$SigningDetails)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApk(android.content.pm.parsing.result.ParseInput,java.io.File,java.lang.String,android.content.pm.split.SplitAssetLoader,int)>",
-                "<android.content.pm.parsing.component.ParsedServiceUtils: android.content.pm.parsing.result.ParseResult parseService(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,boolean,android.content.pm.parsing.result.ParseInput)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApplication(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parseBaseApkTags(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.TypedArray,android.content.res.Resources,android.content.res.XmlResourceParser,int)>",
-                "<android.content.pm.parsing.ParsingPackageUtils: android.content.pm.parsing.result.ParseResult parsePermission(android.content.pm.parsing.result.ParseInput,android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser)>",
+                "<com.android.server.pm.permission.PermissionManagerService: void onPackageAddedInternal(com.android.server.pm.parsing.pkg.AndroidPackage,boolean,com.android.server.pm.parsing.pkg.AndroidPackage)>",
+                "<com.android.server.pm.permission.PermissionManagerService: void grantRuntimePermissionInternal(java.lang.String,java.lang.String,boolean,int,int,com.android.server.pm.permission.PermissionManagerService$PermissionCallback)>",
                 "<android.content.pm.parsing.component.ParsedProcessUtils: android.content.pm.parsing.result.ParseResult parseProcesses(java.lang.String[],android.content.pm.parsing.ParsingPackage,android.content.res.Resources,android.content.res.XmlResourceParser,int,android.content.pm.parsing.result.ParseInput)>"
         };
         String methodSig = sigs[0];
         Body body = Utils.getBodyOfMethod(methodSig);
-        System.out.println(body);
-        /*for(Unit u : body.getUnits()){
-            if(u instanceof DefinitionStmt){
-                System.out.println("+++"+u);
+        //List<Value> values = new ArrayList<>();
+        //Value v = null;
+        //System.out.println(body);
+        for(Unit u : body.getUnits()){
+            if(u.toString().equals("$z0 = $z1")){
+                AssignStmt as = (AssignStmt) u;
+                System.out.println(as);
+                System.out.println(Utils.isCopyStmt(as));
             }
-            if(u instanceof AssignStmt){
-                System.out.println("---"+u);
-            }
-        }*/
-
+        }
         //UnitGraph ug = new ExceptionalUnitGraph(body);
         /*UnitGraph ug = new CompleteUnitGraph(body);
-        TestImpl test = new TestImpl(ug);
+        test.TestImpl test = new test.TestImpl(ug);
         Unit unit = ug.getHeads().get(0);
         while(true){
             System.out.println(unit);
@@ -202,12 +176,46 @@ public class Main {
             System.out.println(test.getFlowBefore(unit));
             unit = body.getUnits().getSuccOf(unit);
             if(unit == null) break;
-            Utils.pause();
+            analysis.Utils.pause();
         }*/
-        /*CompleteBlockGraph cbg = new CompleteBlockGraph(body);
-        Graph.generatePathsFromBlock(cbg.getHeads().get(0));
-        System.out.println(Graph.paths.size());
-        System.out.println(Utils.hasDuplicatedItems(Graph.paths));*/
+        CompleteBlockGraph cbg = new CompleteBlockGraph(body);
+        List<Block> blocks = new ArrayList<>();
+       /* List<Integer> ancestor = new ArrayList<>();
+        Graph.getAncestorsOfBlock(cbg.getBlocks().get(19), ancestor);
+        System.out.println(ancestor);
+        for (int i = 2; i < 20; i+=4) {
+            blocks.add(cbg.getBlocks().get(i));
+        }*/
+        blocks.add(cbg.getBlocks().get(8));
+        blocks.add(cbg.getBlocks().get(18));
+        blocks.add(cbg.getBlocks().get(23));
+        /*blocks.add(cbg.getBlocks().get(39));
+        blocks.add(cbg.getBlocks().get(52));
+        blocks.add(cbg.getBlocks().get(61));
+        blocks.add(cbg.getBlocks().get(73));
+        blocks.add(cbg.getBlocks().get(76));
+        blocks.add(cbg.getBlocks().get(86));
+        blocks.add(cbg.getBlocks().get(91));
+        blocks.add(cbg.getBlocks().get(93));
+        blocks.add(cbg.getBlocks().get(96));
+        blocks.add(cbg.getBlocks().get(102));
+        blocks.add(cbg.getBlocks().get(115));
+        blocks.add(cbg.getBlocks().get(129));
+        blocks.add(cbg.getBlocks().get(142));
+        blocks.add(cbg.getBlocks().get(163));
+        blocks.add(cbg.getBlocks().get(184));
+        blocks.add(cbg.getBlocks().get(197));
+        blocks.add(cbg.getBlocks().get(209));*/
+        System.out.println("Stupid: " + Graph.getLeastCommonAncestorOfBlocks2(blocks));
+        System.out.println("Smart: " + Graph.getLeastCommonAncestorOfBlocks(blocks));
+        //Block block = cbg.getBlocks().get(71);
+        //System.out.println(Graph.isTailBlockOfLoop(block));
+        /*Collection<ExceptionalBlockGraph.ExceptionDest> exceptionDests = cbg.getExceptionDests(block);
+        System.out.println(exceptionDests.size());
+        for(ExceptionalBlockGraph.ExceptionDest e : exceptionDests){
+            System.out.println(e.getHandlerNode());
+            System.out.println(e.getThrowables());
+        }*/
         /*List<Value> v1 = new ArrayList<>();
         List<Value> v2 = new ArrayList<>();
        for(Unit unit : body.getUnits()) {
@@ -222,7 +230,7 @@ public class Main {
        for(Unit unit : body.getUnits()){
            if(unit instanceof AssignStmt) {
                AssignStmt as = (AssignStmt) unit;
-               if(!Utils.hasRightValueOfAssignStmt(as, v1).isEmpty()){
+               if(!analysis.Utils.hasRightValueOfAssignStmt(as, v1).isEmpty()){
                    System.out.println(as);
                }
            }
@@ -231,21 +239,60 @@ public class Main {
 
 
     private static void test4() {
-        SootClass cls = Scene.v().getSootClassUnsafe("android.content.pm.parsing.ParsingPackageUtils");
-        for (SootField sf : cls.getFields()) {
-            System.out.println("--" + sf.getDeclaration());
-        }
+        Set<String> s1 = new HashSet<>();
+        s1.add("A");
+        List<String> t1 = new ArrayList<>(s1);
+        t1.remove(0);
+        System.out.println(s1);
+        System.out.println(t1);
+        /*String element1 = "[[\"application\"_\"library\"]]";
+        System.out.println(AnalysisForUsingMethods.isDeDuplicateMethod(element1));
+        String element2 = "[[\"application\"_\"uses-library\"], [\"application\"_\"uses-static-library\"], [\"application\"_\"uses-native-library\"]]";
+        System.out.println(AnalysisForUsingMethods.isDeDuplicateMethod(element2));
+        String element3 = "[[\"application\"_\"uses-permission-sdk-m\", \"application\"_\"uses-permission\", \"application\"_\"uses-permission-sdk-23\"]]";
+        System.out.println(AnalysisForUsingMethods.isDeDuplicateMethod(element3));
+        String element4 = "[[\"application\"_\"uses-permission-sdk-m\", \"application\"_\"uses-permission\", \"application\"_\"uses-permission-sdk-23\"], [\"application\"_\"uses-static-library\"], [\"application\"_\"library\"]]";
+        System.out.println(AnalysisForUsingMethods.isDeDuplicateMethod(element4));
+        String element5 = "[[\"application\"_\"instrumentation\"], [\"application\"_\"library\"]]";
+        System.out.println(AnalysisForUsingMethods.isDeDuplicateMethod(element5));
+        String e6 = "[[\"application\"_\"receiver\"], [\"application\"_\"activity\", \"application\"_\"activity-alias\"], [\"application\"_\"provider\"], [\"application\"_\"service\"]]";
+        System.out.println(AnalysisForUsingMethods.isDeDuplicateMethod(e6));*/
     }
 
     public static void test5() throws IOException, InterruptedException {
         String framework_path = sourceCode_base_path+"frameworks";
         String packages_path = sourceCode_base_path+"packages";
         getJavaFiles(packages_path);
-        //copyFile(new File("src/Log.java"), "Log_copy.java");
-        //File f = new File("src/Log.java");
+        //copyFile(new File("src/analysis.Log.java"), "Log_copy.java");
+        //File f = new File("src/analysis.Log.java");
         //System.out.println(f.getParent());
         //createDir("/data/disk_16t_2/leiry/1/2/3");
     }
+
+    public static void test6(){
+        List<String> data = Log.readData(AnalysisForParsingClass.analysis_data);
+        Set<String> methods = new HashSet<>();
+        for(int i= 0; i< data.size(); i++){
+            if(data.get(i).equals("--- analysis.Tainted callee.")){
+                int j = i;
+                while(true){
+                    j = j -1;
+                    if(data.get(j).startsWith("+ Unit:")){
+                        String method = data.get(j).split(".<")[1].split(">")[0];
+                        //System.out.println(method);
+                        methods.add(method);
+                        //analysis.Utils.pause();
+                        break;
+                    }
+                }
+            }
+        }
+        for(String method : methods){
+            System.out.println(method);
+        }
+    }
+
+
     public static void getJavaFiles(String file_path){
         //System.out.println(file_path);
         if(file_path == null) return;
@@ -254,39 +301,13 @@ public class Main {
             if (file.getName().endsWith(".java")) {
                 String dest_path = file.getAbsolutePath().replace(sourceCode_base_path, javaCode_path);
                 System.out.println(dest_path);
-                copyFile(file, dest_path);
+                Utils.copyFile(file, dest_path);
             }
         } else if (file.isDirectory()) {
             File[] files = file.listFiles();
             for (File f : files) {
                 getJavaFiles(f.getAbsolutePath());
             }
-        }
-    }
-
-    public static void copyFile(File source, String dest_path){
-        try {
-            File dest = new File(dest_path);
-            createDir(dest.getParent());
-            FileChannel inputChannel = new FileInputStream(source).getChannel();
-            FileChannel outputChannel = new FileOutputStream(dest).getChannel();
-            outputChannel.transferFrom(inputChannel, 0, inputChannel.size());
-            inputChannel.close();
-            outputChannel.close();
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    public static void createDir(String dir_path){
-        try {
-            File dir = new File(dir_path);
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-        }catch (Exception e){
-            throw new RuntimeException(e);
         }
     }
     public static void javaFileToClassFile(String file_path){
@@ -306,29 +327,6 @@ public class Main {
             throw new RuntimeException(e);
         }
     }
-    public static void test6(){
-        List<String> data = Log.readData(AnalysisForParsingClass.analysis_data);
-        Set<String> methods = new HashSet<>();
-        for(int i= 0; i< data.size(); i++){
-            if(data.get(i).equals("--- Tainted callee.")){
-                int j = i;
-                while(true){
-                    j = j -1;
-                    if(data.get(j).startsWith("+ Unit:")){
-                        String method = data.get(j).split(".<")[1].split(">")[0];
-                        //System.out.println(method);
-                        methods.add(method);
-                        //Utils.pause();
-                        break;
-                    }
-                }
-            }
-        }
-        for(String method : methods){
-            System.out.println(method);
-        }
-    }
-
 
     public static void generateCallPaths(String method_sig, int flag, int depth){
         System.out.println("-----------------------------");
@@ -383,7 +381,7 @@ public class Main {
             //System.out.println("++++: " + as.getUseBoxes());
             //System.out.println("&&&&: " + as.getRightOp());
            // Value vv = as.getUseBoxes().get(0).getValue();
-            //System.out.println("****: " + Utils.isRightValueOfAssignment(as, vv));
+            //System.out.println("****: " + analysis.Utils.isRightValueOfAssignment(as, vv));
             if(as.getUseBoxes().size() == 1){
                 Value use_value = as.getRightOp();
                 if(use_value instanceof IntConstant){
