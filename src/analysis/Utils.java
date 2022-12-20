@@ -516,6 +516,30 @@ public class Utils {
             throw new RuntimeException(e);
         }
     }
+
+    public static String ms2DHMS(long start, long end){
+        String retval = null;
+        long secondCount = (end-start) / 1000;
+        String ms = (end - start) % 1000 + "ms";
+
+        long days = secondCount / (60*60*24);
+        long hours = (secondCount % (60*60*24)) / (60*60);
+        long minutes = (secondCount % (60*60)) / 60;
+        long seconds = secondCount % 60;
+
+        if(days > 0){
+            retval = days + "d" + hours + "h" + minutes + "m" + seconds + "s";
+        } else if (hours > 0) {
+            retval = hours + "h" + minutes + "m" + seconds + "s";
+        } else if (minutes > 0) {
+            retval = minutes + "m" + seconds + "s";
+        } else if (seconds > 0) {
+            retval = seconds + "s";
+        } else {
+            return ms;
+        }
+        return retval + ms;
+    }
 }
 
 

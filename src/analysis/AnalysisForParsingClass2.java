@@ -1,6 +1,5 @@
 package analysis;
 
-import comparator.StringComparator;
 import graph.Graph;
 import soot.*;
 import soot.jimple.*;
@@ -21,7 +20,7 @@ public class AnalysisForParsingClass2 extends Analysis {
     // The tainted_methods needed to be analysed.
     // Each object consists of <tainted method, tainted value, associated element>
     // Use queue to do BFS.
-    public static Queue<Tainted> tainted_points = new LinkedList<Tainted>();
+    public static Queue<BU> tainted_points = new LinkedList<BU>();
 
     // element name => data structures.
     public static Map<String, Set<String>> associatedElementToDataStructures = new HashMap<String, Set<String>>();
@@ -65,11 +64,6 @@ public class AnalysisForParsingClass2 extends Analysis {
                 if(Utils.hasCopyOfValues(as, entry_value_copies)){
                     return false;
                 }
-                if (ie == null && as.getUseBoxes().size() == 2) {
-                    if (! as.getLeftOp().toString().contains(".<") && ! as.getRightOp().toString().startsWith("(")) {
-                        return false;
-                    }
-                }
                 if (entry_value_copies.contains(base)) {
                     String method_name = ie.getMethod().getName();
                     if(canFilterForTaintedBase(base, method_name)){
@@ -110,6 +104,13 @@ public class AnalysisForParsingClass2 extends Analysis {
                     return false;
                 }
                 return true;
+            }
+            // Interested unit -- the entry value is the base of the method toArray.
+            if(entry_value_copies.contains(base)){
+                String method_name = ie.getMethod().getName();
+                if(method_name.equals("toArray")){
+                    return true;
+                }
             }
         }
         return false;
@@ -391,10 +392,10 @@ public class AnalysisForParsingClass2 extends Analysis {
         }
     }
 
-    public static String transformUnknownTaintedMapItem(String ds, List<Tainted> analyzed_tainted_points){
+    public static String transformUnknownTaintedMapItem(String ds, List<BU> analyzed_tainted_points){
         String method_sig = ds.split("unknown\\(")[1].split(">")[0] + ">";
         int flag_known = 0;
-        for(Tainted point : analyzed_tainted_points){
+        for(BU point : analyzed_tainted_points){
             if(point.getMethod().getSignature().equals(method_sig)){
                 List<Pair<String, String>> e_ds = point.getInnerElementAndStructures();
                 if(e_ds == null) {
@@ -452,9 +453,10 @@ public class AnalysisForParsingClass2 extends Analysis {
     }
 
     // Find the blocks that contains the interested units.
-    public static List<Block> findAllInterestedBlocks(CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies, Set<AssignStmt> entry_assigns,
-                                                   Map<Value, String> stringValueToLikelyElement){
+    public static List<Block> findAllInterestedBlocks(CompleteBlockGraph cbg, BU entry, List<Value> entry_value_copies, Set<AssignStmt> entry_assigns,
+                                                      Map<Value, String> stringValueToLikelyElement){
         List<Block> interested_blocks = new ArrayList<>();
+        String ids = " ";
         int store_param = entry.getParameters() == null? 1:0;
         for(Block block : cbg.getBlocks()){
             int flag_interested = 0;
@@ -513,15 +515,17 @@ public class AnalysisForParsingClass2 extends Analysis {
                     if(!interested_blocks.contains(block)){
                         interested_blocks.add(block);
                     }
+                    ids += block.getIndexInMethod() + "_";
                     break;
                 }
             }
         }
+        System.out.println("Interested blocks: " + ids);
         return interested_blocks;
     }
     // For path-sensitive analysis.
     // Find the LCA block of all interested blocks (including the block in the interested blocks) .
-    public static Block findStartBlock(List<Block> interested_blocks, CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies,
+    public static Block findStartBlock(List<Block> interested_blocks, CompleteBlockGraph cbg, BU entry, List<Value> entry_value_copies,
                                        Map<Value, Value> newValueToCopy, Map<Value, String> numericValueToConcreteAssignment,
                                        Map<Value, String> stringValueToLikelyElement, Map<Value, String> valueToField,
                                        Map<Value, String> mapValueToTaintedItem){
@@ -557,22 +561,23 @@ public class AnalysisForParsingClass2 extends Analysis {
         }
         return null;
     }
-    public static Block findStartBlock(CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
+    // For path-insensitive analysis.
+    public static Block findStartBlock(CompleteBlockGraph cbg, BU bu, List<Value> source_variables, Map<Value, Value> newValueToCopy,
                                        Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> stringValueToLikelyElement,
                                        Map<Value, String> valueToField, Map<Value, String> mapValueToTaintedItem){
-        if(cbg==null || entry == null || entry_value_copies == null) return null;
+        if(cbg==null || bu == null || source_variables == null) return null;
 
         Block start_block = null;
-        int entry_assign = entry.getEntryAssigns() == null? 0:1;
+        int entry_assign = bu.getEntryAssigns() == null? 0:1;
 
         for(Block block : cbg.getBlocks()){
             for(Unit unit : block){
                 if(entry_assign == 1){
                     if(unit instanceof AssignStmt) {
                         AssignStmt as = (AssignStmt) unit;
-                        if (entry.getEntryAssigns().contains(as)) {
+                        if (bu.getEntryAssigns().contains(as)) {
                             System.out.println("Interested unit: " + unit);
-                            entry.setStartUnit(as);
+                            bu.setStartUnit(as);
                             start_block = block;
                             break;
                         }
@@ -583,9 +588,9 @@ public class AnalysisForParsingClass2 extends Analysis {
                             Unit u = ss.getTarget(i);
                             if (u instanceof AssignStmt) {
                                 AssignStmt as = (AssignStmt) u;
-                                if (entry.getEntryAssigns().contains(as)) {
+                                if (bu.getEntryAssigns().contains(as)) {
                                     System.out.println("Interested unit: " + unit);
-                                    entry.setStartUnit(as);
+                                    bu.setStartUnit(as);
                                     start_block = block;
                                     break;
                                 }
@@ -594,9 +599,9 @@ public class AnalysisForParsingClass2 extends Analysis {
                         if(start_block!=null) break;
                     }
                 } else {
-                    if (isInterestedUnit(unit, entry_value_copies, stringValueToLikelyElement)) {
+                    if (isInterestedUnit(unit, source_variables, stringValueToLikelyElement)) {
                         System.out.println("Interested unit: " + unit);
-                        entry.setStartUnit(unit);
+                        bu.setStartUnit(unit);
                         start_block = block;
                         break;
                     }
@@ -605,9 +610,9 @@ public class AnalysisForParsingClass2 extends Analysis {
                         SwitchStmt ss = (SwitchStmt) unit;
                         for (int i = 0; i < ss.getTargets().size(); i++) {
                             Unit u = ss.getTarget(i);
-                            if (isInterestedUnit(u, entry_value_copies, stringValueToLikelyElement)) {
+                            if (isInterestedUnit(u, source_variables, stringValueToLikelyElement)) {
                                 System.out.println("Interested unit: " + unit);
-                                entry.setStartUnit(unit);
+                                bu.setStartUnit(unit);
                                 start_block = block;
                                 break;
                             }
@@ -618,7 +623,7 @@ public class AnalysisForParsingClass2 extends Analysis {
                 if(unit instanceof AssignStmt) {
                     // Store some information before we skip the unit.
                     AssignStmt as = (AssignStmt) unit;
-                    storeUsefulInfo(as, entry_value_copies, newValueToCopy, numericValueToConcreteAssignment,
+                    storeUsefulInfo(as, source_variables, newValueToCopy, numericValueToConcreteAssignment,
                             stringValueToLikelyElement, valueToField, mapValueToTaintedItem);
                 }
             }
@@ -635,15 +640,15 @@ public class AnalysisForParsingClass2 extends Analysis {
     // So, during analyzing, we treat the tainted / entry value as a whole,
     // ignore the part (ie., the attribute) of it.
     // The attributes are wrapped in the parsing result.
-    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> path, int path_sensitive, Tainted entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
+    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> path, int path_sensitive, BU base_unit, List<Value> source_variables, Map<Value, Value> newValueToCopy,
                                                  Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> mapValueToTaintedItem,
                                                  List<String> recorded_tainted_points, Map<Value, String> stringValueToLikelyElement,
                                                  Map<Value, String> valueToField) {
 
-        String entry_element = entry.getOuterElement();
-        Unit start_unit = entry.getStartUnit();
-        List<Tainted> entry_parents = entry.getParents();
-        Set<AssignStmt> entry_assigns = entry.getEntryAssigns();
+        String base_element = base_unit.getOuterElement();
+        Unit start_unit = base_unit.getStartUnit();
+        List<BU> base_parents = base_unit.getParents();
+        Set<AssignStmt> source_defs = base_unit.getEntryAssigns();
 
         // Copy the map.
         // Specific to this path.
@@ -652,38 +657,37 @@ public class AnalysisForParsingClass2 extends Analysis {
         Map<Value, String> mapValueToTaintedItem_path = Utils.deepCopy(mapValueToTaintedItem);
         Map<Value, String> stringValueToLikelyElement_path = Utils.deepCopy(stringValueToLikelyElement);
         Map<Value, String> valueToField_path = Utils.deepCopy(valueToField);
-        List<Value> entry_values_path = Utils.deepCopy(entry_value_copies);
+        List<Value> source_variables_path = Utils.deepCopy(source_variables);
 
-        Value case_value = null; // The bridge value between two LookupSwithStmts.
-        String element = null; // This element only related to entry method.
+        String element = null; // This element related to this path.
         String data_structure = null;
         Value return_value = null;
 
-        List<Value> tainted_values = new ArrayList<>();
-        List<Unit> tainted_units = new ArrayList<>();
+        List<Value> passing_variables = new ArrayList<>(); // The variables into which the data stored in the source variables flow.
+        List<Unit> passing_unit = new ArrayList<>(); // The statements that trigger the variable propagation.
 
-        int flag_start = entry.getStartUnit() == null? 1:0;
-        int flag_entry_assign = entry_assigns==null? 1:0;
+        int flag_start = base_unit.getStartUnit() == null? 1:0;
+        int flag_source_def = source_defs==null? 1:0;
 
         for (int i = 0; i< path.size(); i++) {
             int block_id = path.get(i);
             Block block = blocks.get(block_id);
             for (Unit unit : block) {
-                // If the entry has entry assignments,
-                // the analysis should start with the first entry assignment.
-                if(flag_entry_assign == 0){
+                // If there are source variable's definition statements,
+                // the analysis scope is under the first definition statements.
+                if(flag_source_def == 0){
                     if(unit instanceof AssignStmt){
-                        if(entry_assigns.contains(((AssignStmt) unit))){
-                            flag_entry_assign = 1;
+                        if(source_defs.contains(((AssignStmt) unit))){
+                            flag_source_def = 1;
                         }
                     }
                 }
-                if(flag_entry_assign == 0){
+                if(flag_source_def == 0){
                     continue;
                 }
 
-                // If the entry sets a start unit,
-                // the analysis should start with the start unit.
+                // If the base unit sets a start statement,
+                // the analysis scope should be under this start statement.
                 if (flag_start == 0 && start_unit.equals(unit)) {
                     flag_start = 1;
                 }
@@ -712,20 +716,14 @@ public class AnalysisForParsingClass2 extends Analysis {
                 if(path_sensitive == 1) {
                     if (unit instanceof LookupSwitchStmt) {
                         LookupSwitchStmt lss = (LookupSwitchStmt) unit;
-                        if (case_value == null) { // Get the bridge case value between two LookupSwitchStmts.
-                            case_value = getCaseValue(lss);
-                        } else if (lss.getKey().equals(case_value)) {
-                            boolean wrong_path = isWrongPathForSwitchStmt(analysis_data, blocks, path, i, lss, case_value, numericValueToConcreteAssignment_path);
-                            if (wrong_path) {
-                                Utils.generatePartingLine("!");
-                                Log.logData(analysis_data, "Wrong path, stop analyzing!");
-                                Utils.generatePartingLine("!");
-                                return;
-                            }
-                            // Finish transformation, reset the case value.
-                            case_value = null;
+                        Value case_value = lss.getKey();
+                        boolean wrong_path = isWrongPathForSwitchStmt(analysis_data, blocks, path, i, lss, case_value, numericValueToConcreteAssignment_path);
+                        if (wrong_path) {
+                            Utils.generatePartingLine("!");
+                            Log.logData(analysis_data, "Wrong path, stop analyzing!");
+                            Utils.generatePartingLine("!");
+                            return;
                         }
-                        continue;
                     }else if (unit instanceof IfStmt) {
                         IfStmt is = (IfStmt) unit;
                         boolean wrong_path = isWrongPathForIfStmt(blocks, path, i, is, numericValueToConcreteAssignment_path);
@@ -744,24 +742,24 @@ public class AnalysisForParsingClass2 extends Analysis {
                     assignStmt = 1;
                     AssignStmt as = (AssignStmt) unit;
                     ie = Utils.getInvokeOfAssignStmt(as);
-                    involved_entry_values = Utils.hasRightValuesOfAssignStmt(as, entry_values_path);
-                    involved_pre_tainted_values = Utils.hasRightValuesOfAssignStmt(as, tainted_values);
+                    involved_entry_values = Utils.hasRightValuesOfAssignStmt(as, source_variables_path);
+                    involved_pre_tainted_values = Utils.hasRightValuesOfAssignStmt(as, passing_variables);
                     if(!involved_entry_values.isEmpty() || !involved_pre_tainted_values.isEmpty()){
                         need_analysis = 1;
                     }
                     // This entry / tainted value has been re-defined.
                     if (need_analysis == 0) {
-                        Unit pre_tainted_unit = tainted_units.isEmpty()?  null : tainted_units.get(tainted_units.size() - 1);
-                        Value redefined_value = hasRedefinedValue(as, ie, entry_values_path, pre_tainted_unit, entry_assigns, valueToField_path);
+                        Unit pre_tainted_unit = passing_unit.isEmpty()?  null : passing_unit.get(passing_unit.size() - 1);
+                        Value redefined_value = hasRedefinedValue(as, ie, source_variables_path, pre_tainted_unit, source_defs, valueToField_path);
                         if (redefined_value != null) {
-                            entry_values_path.remove(redefined_value);
+                            source_variables_path.remove(redefined_value);
                             Log.logData(analysis_data, Utils.generatePartingLine("+"));
                             Log.logData(analysis_data, "+ Unit: " + as);
                             Log.logData(analysis_data, "--- The entry value [ " + as.getLeftOp() + " ] is re-defined, remove it.");
-                            Log.logData(analysis_data, "--- Updated the entry value: " + entry_values_path);
+                            Log.logData(analysis_data, "--- Updated the entry value: " + source_variables_path);
                             Log.logData(analysis_data, Utils.generatePartingLine("+"));
                         } else {
-                            redefined_value = hasRedefinedValue(as, ie, tainted_values, pre_tainted_unit, entry_assigns, valueToField_path);
+                            redefined_value = hasRedefinedValue(as, ie, passing_variables, pre_tainted_unit, source_defs, valueToField_path);
                             if (redefined_value!=null) {
                                 Log.logData(analysis_data, Utils.generatePartingLine("+"));
                                 Log.logData(analysis_data, "+ Unit: " + as);
@@ -769,35 +767,45 @@ public class AnalysisForParsingClass2 extends Analysis {
                                 data_structure = getDataStructure(redefined_value, mapValueToTaintedItem_path, valueToField_path,
                                         null, return_value, 0); // Store some information when the tainted value is redefined.
                                 Log.logData(analysis_data, "Store the information -- value re-defined.");
-                                entry.storeInnerElementAndStructure2(element, data_structure); // This element only related to the entry method.
-                                String associated_element = getAssociatedElement(entry_element, element); // This element related to the entry method and its parents.
+                                base_unit.storeInnerElementAndStructure2(element, data_structure); // This element only related to the entry method.
+                                String associated_element = getAssociatedElement(base_element, element); // This element related to the entry method and its parents.
                                 storeAssociatedElementAndCorrespondingDataStructure(associated_element, data_structure);
-                                removePreviouslyTaintedValue(redefined_value, tainted_values, newValueToCopy_path);
-                                Log.logData(analysis_data, "--- Update the tainted value: " + tainted_values);
+                                removePreviouslyTaintedValue(redefined_value, passing_variables, newValueToCopy_path);
+                                Log.logData(analysis_data, "--- Update the tainted value: " + passing_variables);
                                 Log.logData(analysis_data, Utils.generatePartingLine("+"));
                             }
                         }
                         // The entry value may be removed due to value re-defining.
                         // So we need add the entry value to the entry value list again.
-                        if(entry_assigns!=null && entry_assigns.contains(as)){
-                            if(!entry_values_path.contains(as.getLeftOp())){
-                                entry_values_path.add(as.getLeftOp());
+                        if(source_defs!=null && source_defs.contains(as)){
+                            if(!source_variables_path.contains(as.getLeftOp())){
+                                source_variables_path.add(as.getLeftOp());
                                 Log.logData(analysis_data, Utils.generatePartingLine("+"));
                                 Log.logData(analysis_data, "+ Entry assignment: " + as);
-                                Log.logData(analysis_data, "--- Updated the entry value: " + entry_values_path);
+                                Log.logData(analysis_data, "--- Updated the entry value: " + source_variables_path);
                                 Log.logData(analysis_data, Utils.generatePartingLine("+"));
                             }
                         }
                     }
                     // Store useful information.
-                    storeUsefulInfo(as, entry_values_path, newValueToCopy_path, numericValueToConcreteAssignment_path,
+                    storeUsefulInfo(as, source_variables_path, newValueToCopy_path, numericValueToConcreteAssignment_path,
                             stringValueToLikelyElement_path, valueToField_path, mapValueToTaintedItem_path);
                 } else if (unit instanceof InvokeStmt) {
                     ie = ((InvokeStmt) unit).getInvokeExpr();
-                    involved_entry_values = Utils.hasParametersOfInvokeExpr(ie, entry_values_path);
-                    involved_pre_tainted_values = Utils.hasParametersOfInvokeExpr(ie, tainted_values);
+                    base = Utils.getBaseOfInvokeExpr(ie);
+                    callee_name = ie.getMethod().getName();
+                    involved_entry_values = Utils.hasParametersOfInvokeExpr(ie, source_variables_path);
+                    involved_pre_tainted_values = Utils.hasParametersOfInvokeExpr(ie, passing_variables);
                     if(!involved_entry_values.isEmpty() || !involved_pre_tainted_values.isEmpty()) {
                         need_analysis = 1;
+                    } else if(callee_name.equals("toArray")){
+                        if(source_variables_path.contains(base)){
+                            involved_entry_values.add(base);
+                            need_analysis = 1;
+                        } else if (passing_variables.contains(base)){
+                            involved_pre_tainted_values.add(base);
+                            need_analysis = 1;
+                        }
                     }
                 }
 
@@ -814,22 +822,22 @@ public class AnalysisForParsingClass2 extends Analysis {
                     // Have solved one element case.
                     // Or have tainted some values that irrelevant to this element.
                     String old_element = element;
-                    if(old_element != null || !tainted_values.isEmpty()) {
+                    if(old_element != null || !passing_variables.isEmpty()) {
                         // Store some information before updating the element.
                         Log.logData(analysis_data, Utils.generatePartingLine("="));
                         Log.logData(analysis_data, "Store information -- element update.");
-                        if(tainted_values.isEmpty()){
-                            tainted_values.add(null);
+                        if(passing_variables.isEmpty()){
+                            passing_variables.add(null);
                         }
-                        for(Value v : tainted_values){
+                        for(Value v : passing_variables){
                             data_structure = getDataStructure(v, mapValueToTaintedItem_path, valueToField_path,
                                     null, return_value, 0);
-                            entry.storeInnerElementAndStructure2(old_element, data_structure); // This element only related to the entry method.
-                            String associated_element = getAssociatedElement(entry_element, old_element); // This element related to the entry method and its parents.
+                            base_unit.storeInnerElementAndStructure2(old_element, data_structure); // This element only related to the entry method.
+                            String associated_element = getAssociatedElement(base_element, old_element); // This element related to the entry method and its parents.
                             storeAssociatedElementAndCorrespondingDataStructure(associated_element, data_structure);
                         }
-                        tainted_values.clear();
-                        tainted_units.clear();
+                        passing_variables.clear();
+                        passing_unit.clear();
                     }
                     // Update the element.
                     element = s;
@@ -902,8 +910,8 @@ public class AnalysisForParsingClass2 extends Analysis {
                         if(base != null){
                             // Update the tainted value.
                             Value newly_tainted_value = base;
-                            updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, tainted_values, newValueToCopy_path, callee_name);
-                            tainted_units.add(unit);
+                            updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, passing_variables, newValueToCopy_path, callee_name);
+                            passing_unit.add(unit);
                             continue;
                         }
                     }
@@ -914,20 +922,20 @@ public class AnalysisForParsingClass2 extends Analysis {
                             // Update the Map value information.
                             if(Utils.isMapValue(base)){
                                 String tainted_map_item = confirmTaintedItemOfTaintedMap(callee_name, ie, tainted_param_indices,
-                                        tainted_units, mapValueToTaintedItem_path);
+                                        passing_unit, mapValueToTaintedItem_path);
                                 storeTaintedMapValueAndCorrespondingTaintedItem(base, tainted_map_item, mapValueToTaintedItem_path, newValueToCopy_path);
                             }
                             // Update the tainted value.
                             Value newly_tainted_value = base;
-                            updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, tainted_values, newValueToCopy_path, callee_name);
-                            tainted_units.add(unit);
+                            updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, passing_variables, newValueToCopy_path, callee_name);
+                            passing_unit.add(unit);
                             continue;
                         } else if(assignStmt == 1){
                             // Update the Map value information.
                             AssignStmt as = (AssignStmt) unit;
                             if(Utils.isMapValue(as.getLeftOp())){
                                 String tainted_map_item = confirmTaintedItemOfTaintedMap(callee_name, ie, tainted_param_indices,
-                                        tainted_units, mapValueToTaintedItem_path);
+                                        passing_unit, mapValueToTaintedItem_path);
                                 storeTaintedMapValueAndCorrespondingTaintedItem(as.getLeftOp(), tainted_map_item, mapValueToTaintedItem_path, newValueToCopy_path);
                             }
                         }
@@ -935,8 +943,8 @@ public class AnalysisForParsingClass2 extends Analysis {
                     if(callee_name.equals("arraycopy")){
                         // Update the tainted value.
                         Value newly_tainted_value = ie.getArg(2);
-                        updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, tainted_values, newValueToCopy_path, callee_name);
-                        tainted_units.add(unit);
+                        updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, passing_variables, newValueToCopy_path, callee_name);
+                        passing_unit.add(unit);
                         continue;
                     }
                     if(needRecordMethod(assignStmt, flag_parser, callee_name)){
@@ -950,13 +958,13 @@ public class AnalysisForParsingClass2 extends Analysis {
                             Log.logData(analysis_data, "--- Record the tainted method: " + callee_name);
                             recorded_tainted_points.add(tainted_point_sig);
                             // Store the tainted child.
-                            Tainted tainted_child = new Tainted(callee, tainted_param_indices, element, unit, involved_map_item); // This element only related to entry method.
-                            entry.storeTaintedChild(tainted_child);
+                            BU tainted_child = new BU(callee, tainted_param_indices, element, unit, involved_map_item); // This element only related to entry method.
+                            base_unit.storeTaintedChild(tainted_child);
                             // Record the newly tainted point.
-                            String associated_element = getAssociatedElement(entry_element, element); // This element related to entry method and its parents.
-                            List<Tainted> parents = Utils.deepCopy(entry_parents);
-                            parents.add(entry);
-                            Tainted new_tainted_point = new Tainted(callee, tainted_param_indices, associated_element, parents, unit, involved_map_item);
+                            String associated_element = getAssociatedElement(base_element, element); // This element related to entry method and its parents.
+                            List<BU> parents = Utils.deepCopy(base_parents);
+                            parents.add(base_unit);
+                            BU new_tainted_point = new BU(callee, tainted_param_indices, associated_element, parents, unit, involved_map_item);
                             tainted_points.offer(new_tainted_point);
                         } else {
                             Log.logData(analysis_data, "--- This tainted method has been recoded.");
@@ -988,7 +996,7 @@ public class AnalysisForParsingClass2 extends Analysis {
                 if (assignStmt == 1) {
                     AssignStmt as = (AssignStmt) unit;
                     // There is a copy of entry value.
-                    if(Utils.hasCopyOfValues(as, entry_values_path)){
+                    if(Utils.hasCopyOfValues(as, source_variables_path)){
                         Log.logData(analysis_data, "--- Pass.");
                         continue;
                     }
@@ -1003,7 +1011,7 @@ public class AnalysisForParsingClass2 extends Analysis {
                         }
                     }
                     // Update the Map value information.
-                    updateTaintedMapValueInfo(as, ie, tainted_units, mapValueToTaintedItem_path, newValueToCopy_path);
+                    updateTaintedMapValueInfo(as, ie, passing_unit, mapValueToTaintedItem_path, newValueToCopy_path);
                     // Update the tainted value.
                     Value newly_tainted_value = as.getLeftOp();
                     if(newly_tainted_value.getType().toString().endsWith("ParsingPackage")){ // The obtained data structures are attributions of ParsingPackage.
@@ -1011,31 +1019,31 @@ public class AnalysisForParsingClass2 extends Analysis {
                         continue;
                     }
                     if(flag_attribute == 1 || newly_tainted_value.getType().toString().equals("boolean")){
-                        addNewlyTaintedValue(newly_tainted_value, tainted_values, newValueToCopy_path);
-                        Log.logData(analysis_data, "--- Update the tainted value: " + tainted_values);
+                        addNewlyTaintedValue(newly_tainted_value, passing_variables, newValueToCopy_path);
+                        Log.logData(analysis_data, "--- Update the tainted value: " + passing_variables);
                     } else {
-                        updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, tainted_values, newValueToCopy_path, callee_name);
+                        updateTaintedValues(newly_tainted_value, involved_pre_tainted_values, passing_variables, newValueToCopy_path, callee_name);
                     }
                 }
-                tainted_units.add(unit);
+                passing_unit.add(unit);
             }
         }
 
         // Store some information.
         Log.logData(analysis_data, Utils.generatePartingLine("="));
         Log.logData(analysis_data, "Store information -- analyze completely.");
-        if(tainted_values.isEmpty()){
-            tainted_values.add(null);
+        if(passing_variables.isEmpty()){
+            passing_variables.add(null);
         }
-        for(Value v : tainted_values) {
+        for(Value v : passing_variables) {
             data_structure = getDataStructure(v, mapValueToTaintedItem_path, valueToField_path, null, return_value, 0);
-            entry.storeInnerElementAndStructure2(element, data_structure); // This element only related to the entry method.
-            String associated_element = getAssociatedElement(entry_element, element); // This element related to the entry method and its parents.
+            base_unit.storeInnerElementAndStructure2(element, data_structure); // This element only related to the entry method.
+            String associated_element = getAssociatedElement(base_element, element); // This element related to the entry method and its parents.
             storeAssociatedElementAndCorrespondingDataStructure(associated_element, data_structure);
         }
     }
 
-    public static void dataFlowAnalysisForMethod(Tainted entry){
+    public static void dataFlowAnalysisForMethod(BU entry){
         SootMethod entry_method = entry.getMethod();
         Body body = null;
         if (entry_method.isConcrete()) {
@@ -1079,11 +1087,13 @@ public class AnalysisForParsingClass2 extends Analysis {
 
 
         Log.logData(analysis_data, "+ Entry value: " + entry_values);
+        Log.logData(analysis_data, "+ Entry element: " + entry.getOuterElement());
         Log.logData(analysis_data, "+ Entry map item: " + mapValueToTaintedItem);
 
         Utils.printPartingLine("=");
         System.out.println("+ Method: " + entry_method.getName());
         System.out.println("+ Entry value: " + entry_values);
+        System.out.println("+ Entry element: " + entry.getOuterElement());
         System.out.println("+ Entry map item: " + entry_mapItem);
 
         // Construct the block graph.
@@ -1162,6 +1172,7 @@ public class AnalysisForParsingClass2 extends Analysis {
         // Log data.
         Log.logData(analysis_data, "+ Parameters:" + entry.getParameters());
         Log.logData(analysis_data, "+ Start block id: " + start_block.getIndexInMethod());
+        Log.logData(analysis_data, "+ likely_element: " + stringValueToLikelyElement);
 
         System.out.println("Generate path...");
         if(path_sensitive == 0){ // This method is unsuitable for the path-sensitive analysis.
@@ -1241,7 +1252,7 @@ public class AnalysisForParsingClass2 extends Analysis {
                     }
                 }
                 if(!entry_values.isEmpty()){
-                    Tainted entry = new Tainted(sm, entry_values);
+                    BU entry = new BU(sm, entry_values);
                     entry.setEntryAssigns(entry_assigns);
                     tainted_points.offer(entry);
                 }
@@ -1269,10 +1280,10 @@ public class AnalysisForParsingClass2 extends Analysis {
 
         findEntryPoints();
 
-        List<Tainted> analyzed_tainted_points = new ArrayList<>();
+        List<BU> analyzed_tainted_points = new ArrayList<>();
 
         while (!tainted_points.isEmpty()) {
-            Tainted tainted_point = tainted_points.poll();
+            BU tainted_point = tainted_points.poll();
             SootMethod tainted_method = tainted_point.getMethod();
             String tainted_element = tainted_point.getOuterElement();
             Unit tainted_call_unit = tainted_point.getCallUnit();
@@ -1294,7 +1305,7 @@ public class AnalysisForParsingClass2 extends Analysis {
 
             int flag_analyzed = 0;
             String tainted_point_sig = generateTaintedPointSignature(tainted_point);
-            for(Tainted atp : analyzed_tainted_points){
+            for(BU atp : analyzed_tainted_points){
                 String atp_sig = generateTaintedPointSignature(atp);
                 if(atp_sig.equals(tainted_point_sig)){
                     Log.logData(analysis_data, "+ Entry value: " + tainted_point.getTaintedValues());
@@ -1318,15 +1329,15 @@ public class AnalysisForParsingClass2 extends Analysis {
                         }
                     }
                     // If this method tainted other methods, store their information.
-                    Set<Tainted> children = atp.getTaintedChildren();
+                    Set<BU> children = atp.getTaintedChildren();
                     tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
                     if(children != null) {
-                        List<Tainted> parents = Utils.deepCopy(tainted_point.getParents());
+                        List<BU> parents = Utils.deepCopy(tainted_point.getParents());
                         parents.add(tainted_point);
-                        for (Tainted child : children) {
+                        for (BU child : children) {
                             String element = child.getOuterElement(); // This element only associate with the tainted method.
                             String associated_element = getAssociatedElement(tainted_element, element); // This element associate with the tainted method and its parents.
-                            Tainted newly_tainted_point = new Tainted(child.getMethod(), child.getTaintedParamIndices(), associated_element, parents, child.getCallUnit(), child.getTaintedMapItem());
+                            BU newly_tainted_point = new BU(child.getMethod(), child.getTaintedParamIndices(), associated_element, parents, child.getCallUnit(), child.getTaintedMapItem());
                             tainted_points.offer(newly_tainted_point);
                         }
                     }
@@ -1367,14 +1378,14 @@ public class AnalysisForParsingClass2 extends Analysis {
                 // because other classes who want to get a package's settings must through this class.
                 if(isSuspiciousDataStructure(ds)){
                     Log.logData(suspicious_structures, ds + "=>" + associated_element);
-                    for (Tainted point : analyzed_tainted_points) {
+                    for (BU point : analyzed_tainted_points) {
                         List<Pair<String, String>> e_ds = point.getInnerElementAndStructures();
                         for (Pair<String, String> e_d : e_ds) {
                             String element = getAssociatedElement(point.getOuterElement(), e_d.getO1());
                             if (associated_element.equals(element) && ds.equals(e_d.getO2())) {
                                 Log.logData(element_data, Utils.generatePartingLine("-"));
                                 Log.logData(element_data, "+ call path:");
-                                for (Tainted parent : point.getParents()) {
+                                for (BU parent : point.getParents()) {
                                     Log.logData(element_data, "--- " + parent.getMethod().getSignature());
                                 }
                                 Log.logData(element_data, "---" + point.getMethod().getSignature());

@@ -5,7 +5,6 @@ import soot.*;
 import soot.jimple.*;
 import soot.jimple.internal.ConditionExprBox;
 import soot.toolkits.graph.Block;
-import soot.toolkits.scalar.Pair;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -59,6 +58,48 @@ public class Analysis {
         }
     }
 
+    public static boolean isIdentifierRelated(AssignStmt as, String base_method_name){
+        InvokeExpr ie = Utils.getInvokeOfAssignStmt(as);
+        if(ie == null){
+            // $r10 = $r6.<android.content.pm.parsing.component.ParsedProcess: java.lang.String name>
+            // name or process or tag
+            if(as.getUseBoxes().size() == 2 && as.getRightOp().toString().contains("<")){
+                String[] infos = as.getRightOp().toString().split(" ");
+                if(infos[1].endsWith("String") &&
+                        (infos[2].endsWith("name>") || infos[2].endsWith("Name>") || infos[2].endsWith("tag>"))){
+                    return true;
+                }
+            }
+        } else {
+            Value base = Utils.getBaseOfInvokeExpr(ie);
+            String method_name = ie.getMethod().getName();
+            Type return_type = ie.getMethod().getReturnType();
+            // $r7 = interfaceinvoke $r3.<android.content.res.XmlResourceParser: java.lang.String getName()>()
+            if(base!=null && method_name.startsWith("get") &&
+                    return_type != null && return_type.toString().endsWith("String")){
+                // name or process or tag
+                if(method_name.endsWith("Name") || method_name.endsWith("Tag")){
+                    return true;
+                } else {
+                    // $r10 = virtualinvoke $r8.<android.content.res.TypedArray: java.lang.String getNonConfigurationString(int,int)>(0, 0);
+                    if(base.getType().toString().endsWith("TypedArray") && !ie.getArgs().isEmpty()){
+                        // tag
+                        if(base_method_name.equals("parseAttribution")){
+                            if(ie.getArg(0).toString().equals("1")){
+                                return true;
+                            }
+                        } else { // name or process
+                            if (ie.getArg(0).toString().equals("0")) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     public static boolean isWrongPathForIfStmt(List<Block> blocks, List<Integer> block_ids, int block_ids_index, IfStmt is, Map<Value, String> numericValueToConcreteAssignment) {
         int result = isConditionMet(is, numericValueToConcreteAssignment);
         if(result != -1 ){
@@ -88,36 +129,40 @@ public class Analysis {
 
     public static boolean isWrongPathForSwitchStmt(String log_file, List<Block> blocks, List<Integer> block_ids, int block_ids_index,
                                                    LookupSwitchStmt lss, Value case_value, Map<Value, String> numericValueToConcreteAssignment) {
-        String case_id = numericValueToConcreteAssignment.get(case_value); // Find the case id associated with this path.
-        if (case_id != null) {
-            int id = Integer.parseInt(case_id);
-            Unit target_unit;
-            if (id != -1) {
-                target_unit = lss.getTarget(id);
-            } else {
-                target_unit = lss.getDefaultTarget();
-            }
-            if (target_unit != null) {
-                if (block_ids_index + 1 < block_ids.size()) {
-                    Unit next_block_head = blocks.get(block_ids.get(block_ids_index + 1)).getHead();
-                    Log.logData(log_file, Utils.generatePartingLine("+"));
-                    Log.logData(log_file, "Case value: " + case_value + " => " + case_id);
-                    Log.logData(log_file, "Target unit (hash code): " + target_unit.hashCode());
-                    Log.logData(log_file, "Next block head (hash code): " + next_block_head.hashCode());
-                    Log.logData(log_file, Utils.generatePartingLine("+"));
-                    // If the next block's first Unit is not the target Unit, this path is incorrect.
-                    if (!next_block_head.equals(target_unit)) {
-                        return true;
-                    }
+        if(numericValueToConcreteAssignment.containsKey(case_value)){
+            String case_id = numericValueToConcreteAssignment.get(case_value); // Find the case id associated with this path.
+            if (case_id != null) {
+                int id = Integer.parseInt(case_id);
+                Unit target_unit;
+                if (id != -1) {
+                    target_unit = lss.getTarget(id);
+                } else {
+                    target_unit = lss.getDefaultTarget();
                 }
-            } else {
-                Utils.generatePartingLine("!");
-                System.out.println("Cannot find the target Unit of the case ID [ " + case_id + " ].");
-                System.out.println("SwitchStmt: " + lss);
-                Utils.generatePartingLine("!");
-                exit(0);
+                if (target_unit != null) {
+                    if (block_ids_index + 1 < block_ids.size()) {
+                        Unit next_block_head = blocks.get(block_ids.get(block_ids_index + 1)).getHead();
+                        Log.logData(log_file, Utils.generatePartingLine("+"));
+                        Log.logData(log_file, "Case value: " + case_value + " => " + case_id);
+                        Log.logData(log_file, "Target unit (hash code): " + target_unit.hashCode());
+                        Log.logData(log_file, "Next block head (hash code): " + next_block_head.hashCode());
+                        Log.logData(log_file, Utils.generatePartingLine("+"));
+                        // If the next block's first Unit is not the target Unit, this path is incorrect.
+                        if (!next_block_head.equals(target_unit)) {
+                            return true;
+                        }
+                    }
+                } else {
+                    Utils.generatePartingLine("!");
+                    System.out.println("Cannot find the target Unit of the case ID [ " + case_id + " ].");
+                    System.out.println("SwitchStmt: " + lss);
+                    Utils.generatePartingLine("!");
+                    exit(0);
+                }
+            } else { // Cannot confirm the concrete value of case value.
+                return false;
             }
-        } else {
+        }else {
             Utils.generatePartingLine("!");
             System.out.println("Cannot find the corresponding case ID of the case value [ " + case_value + " ].");
             Utils.generatePartingLine("!");
@@ -294,7 +339,9 @@ public class Analysis {
             } else if(target_unit instanceof LookupSwitchStmt){
                 LookupSwitchStmt lss_target = (LookupSwitchStmt) target_unit;
                 return lss_target.getKey();
-            }  else {
+            } else if(target_unit instanceof IfStmt){
+                return null;
+            } else {
                 Utils.printPartingLine("!");
                 System.out.println("Special default target's target: " + target_unit);
                 Utils.printPartingLine("!");
@@ -363,7 +410,7 @@ public class Analysis {
         return null;
     }
 
-    public static SootMethod getImplementedMethodOfAbstractMethod(String log_file, InterfaceInvokeExpr ifi, Tainted tainted_point){
+    public static SootMethod getImplementedMethodOfAbstractMethod(String log_file, InterfaceInvokeExpr ifi, BU tainted_point){
         Value base = ifi.getBase();
         SootMethod abstract_method = ifi.getMethod();
         SootClass interface_cls;
@@ -415,10 +462,10 @@ public class Analysis {
             //System.out.println(implemented_classes);
             int flag_found = 0;
             if (base != null && tainted_point != null) {
-                List<Tainted> path = Utils.deepCopy(tainted_point.getParents());
+                List<BU> path = Utils.deepCopy(tainted_point.getParents());
                 // Find the creation of the base value to confirm the implemented class.
                 for (int i = path.size(); i > 0; i--) {
-                    Tainted point = path.get(i - 1);
+                    BU point = path.get(i - 1);
                     Map<Value, Integer> parameters = point.getParameters();
                     if(parameters == null){
                         Utils.printPartingLine("!");
@@ -502,7 +549,7 @@ public class Analysis {
         return null;
     }
 
-    public static String generateTaintedPointSignature(Tainted tainted_point){
+    public static String generateTaintedPointSignature(BU tainted_point){
         if(tainted_point == null) return null;
         SootMethod tainted_method = tainted_point.getMethod();
         Set<Integer> tainted_param_indices = tainted_point.getTaintedParamIndices();
@@ -629,7 +676,7 @@ public class Analysis {
         }
     }
 
-    public static void storeParameterOfTaintedPoint(Tainted tainted_point, IdentityStmt is){
+    public static void storeParameterOfTaintedPoint(BU tainted_point, IdentityStmt is){
         if(tainted_point == null || is == null) return;
 
         int index = Utils.isParamStmt(is);

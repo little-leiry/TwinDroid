@@ -8,23 +8,23 @@ import soot.toolkits.scalar.Pair;
 
 import java.util.*;
 
-public class Tainted {
+public class BU { // Base analysis unit.
     private SootMethod mMethod;
     private String mOuterElement;
     private Unit mCallUnit;
     private Unit mStartUnit;
     private Set<Integer> mTaintedAttributes;
     private Set<AssignStmt> mEntryAssigns;
-    private Set<Tainted> mTaintedChildren;
+    private Set<BU> mTaintedChildren;
     private Set<Integer> mTaintedParamIndices;
     private List<String> mDataStructures;
     private List<Pair<String, String>> mInnerElementsAndStructures;
-    private List<Tainted> mParents;
+    private List<BU> mParents;
     private List<Value> mTaintedValues;
     private Map<Value, Integer> mParameters;
     private Map<Integer, String> mTaintedMapItem;
 
-    public Tainted(SootMethod method, Set<Integer> param_indices, String element, List<Tainted> parents, Unit call_unit, Map<Integer, String> mapItem) {
+    public BU(SootMethod method, Set<Integer> param_indices, String element, List<BU> parents, Unit call_unit, Map<Integer, String> mapItem) {
         mMethod = method;
         mTaintedParamIndices = param_indices;
         mOuterElement = element;
@@ -33,7 +33,7 @@ public class Tainted {
         mTaintedMapItem = mapItem;
     }
 
-    public Tainted(SootMethod method, Set<Integer> param_indices, String element, Unit call_unit, Map<Integer, String> mapItem){
+    public BU(SootMethod method, Set<Integer> param_indices, String element, Unit call_unit, Map<Integer, String> mapItem){
         mMethod = method;
         mTaintedParamIndices = param_indices;
         mOuterElement = element;
@@ -41,23 +41,23 @@ public class Tainted {
         mTaintedMapItem = mapItem;
     }
 
-    public Tainted(SootMethod method, Set<Integer> param_indices, Unit call_unit, Map<Integer, String> mapItem){
+    public BU(SootMethod method, Set<Integer> param_indices, Unit call_unit, Map<Integer, String> mapItem){
         mMethod = method;
         mTaintedParamIndices = param_indices;
         mCallUnit = call_unit;
         mTaintedMapItem = mapItem;
     }
 
-    public Tainted(SootMethod method, List<Value> values){
+    public BU(SootMethod method, List<Value> values){
         mMethod = method;
         mTaintedValues = values;
     }
 
-    public Tainted(SootMethod method){
+    public BU(SootMethod method){
         mMethod = method;
     }
 
-    public Tainted(){}
+    public BU(){}
 
     public SootMethod getMethod(){
         return mMethod;
@@ -74,7 +74,7 @@ public class Tainted {
         return mOuterElement;
     }
 
-    public List<Tainted> getParents(){
+    public List<BU> getParents(){
         return mParents;
     }
 
@@ -86,7 +86,7 @@ public class Tainted {
         return mStartUnit;
     }
 
-    public Set<Tainted> getTaintedChildren(){
+    public Set<BU> getTaintedChildren(){
         return mTaintedChildren;
     }
 
@@ -171,7 +171,7 @@ public class Tainted {
         mInnerElementsAndStructures = e_ds;
     }
 
-    public void storeTaintedChild(Tainted child){
+    public void storeTaintedChild(BU child){
         if(child == null) return;
 
         if(mTaintedChildren==null){
@@ -182,7 +182,7 @@ public class Tainted {
         }
     }
 
-    public void setTaintedChildren(Set<Tainted> children){
+    public void setTaintedChildren(Set<BU> children){
         mTaintedChildren = children;
     }
 

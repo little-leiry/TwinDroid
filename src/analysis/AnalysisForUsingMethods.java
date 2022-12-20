@@ -4,10 +4,8 @@ import comparator.StringComparator;
 import graph.Graph;
 import soot.*;
 import soot.jimple.*;
-import soot.jimple.spark.ondemand.pautil.SootUtil;
 import soot.toolkits.graph.Block;
 import soot.toolkits.graph.CompleteBlockGraph;
-import soot.toolkits.scalar.Pair;
 
 import java.util.*;
 
@@ -18,7 +16,7 @@ public class AnalysisForUsingMethods extends Analysis{
     // The tainted_methods needed to be analysed.
     // Each object consists of <tainted method, tainted value, associated element>
     // Use queue to do BFS.
-    public static Queue<Tainted> tainted_points = new LinkedList<Tainted>();
+    public static Queue<BU> tainted_points = new LinkedList<BU>();
 
     // method c=> data structures.
     public static Map<SootMethod, Set<String>> methodToDataStructures = new HashMap<SootMethod, Set<String>>();
@@ -157,7 +155,7 @@ public class AnalysisForUsingMethods extends Analysis{
         return -1;
     }
 
-    public static boolean isSuspiciousMethod(Set<String> structures, List<Tainted> analyzed_tainted_point){
+    public static boolean isSuspiciousMethod(Set<String> structures, List<BU> analyzed_tainted_point){
         List<String> structures_new = new ArrayList<>(structures);
         List<String> structures_old = new ArrayList<>(structures);
         for (String s: structures_old){
@@ -166,7 +164,7 @@ public class AnalysisForUsingMethods extends Analysis{
             if(s==null){
                 structures.remove(null);
                 flag_remove = 1;
-            } else if (s.contains("remove") || s.contains("return") || s.startsWith("<")){
+            } else if (s.contains("remove")){ // || s.contains("return") || s.startsWith("<")
                 continue;
             } else if (s.contains("attribute") || s.endsWith("Exception")){
                 flag_remove = 1;
@@ -175,6 +173,9 @@ public class AnalysisForUsingMethods extends Analysis{
                     s = transformUnknownTaintedMapItem(s, analyzed_tainted_point);
                 }
                 String type = s.split("_")[0];
+                if(type.startsWith("<")){
+                    type = type.split(" ")[1];
+                }
                 if (type.endsWith("List") || type.endsWith("[]") || type.endsWith("Stack") || type.endsWith("Queue") ||
                         type.endsWith("Collection") || type.endsWith("Iterator") || type.endsWith("Map&Entry") ||
                         type.endsWith("StringBuilder")) {
@@ -330,6 +331,7 @@ public class AnalysisForUsingMethods extends Analysis{
         return involved_removed_struct;
     }
     public static Map<String, String> getEntryBridges(){
+        Log.deleteData(entry_bridges);
         // Data preprocess.
         List<String> d_es = Log.readData(AnalysisForParsingClass2.suspicious_structures);
         Map<String, Set<String>> suspiciousStructureToElements = new HashMap<>();
@@ -437,7 +439,7 @@ public class AnalysisForUsingMethods extends Analysis{
         storeValueAndCorrespondingField(as, valueToField);
     }
 
-    public static void storeDataStructure(Value tainted_value, Tainted tainted_point, Map<Value, String> taintedMapValueToTaintedItem,
+    public static void storeDataStructure(Value tainted_value, BU tainted_point, Map<Value, String> taintedMapValueToTaintedItem,
                                           Set<Value> tainted_attributes, Map<Value, String> valueToField,
                                           Value return_value, int flag_remove){
         String data_structure = getDataStructure(tainted_value, taintedMapValueToTaintedItem, valueToField, tainted_attributes,
@@ -445,17 +447,17 @@ public class AnalysisForUsingMethods extends Analysis{
         tainted_point.storeDataStructure(data_structure);
         // Find the tainted point's farthest ancestor.
         SootMethod farthest_ancestor = tainted_point.getMethod();
-        List<Tainted> parents = tainted_point.getParents();
+        List<BU> parents = tainted_point.getParents();
         if(parents!=null && !parents.isEmpty()) {
              farthest_ancestor = parents.get(0).getMethod();
         }
         storeMethodAndCorrespondingDataStructure(farthest_ancestor, data_structure);
     }
 
-    public static String transformUnknownTaintedMapItem(String ds, List<Tainted> analyzed_tainted_points){
+    public static String transformUnknownTaintedMapItem(String ds, List<BU> analyzed_tainted_points){
         String method_sig = ds.split("unknown\\(")[1].split(">")[0] + ">";
         int flag_known = 0;
-        for(Tainted point : analyzed_tainted_points){
+        for(BU point : analyzed_tainted_points){
             //System.out.println("=== " + method_sig);
             if(point.getMethod().getSignature().equals(method_sig)){
                 List<String> structures = point.getDataStructures();
@@ -532,7 +534,7 @@ public class AnalysisForUsingMethods extends Analysis{
     }
 
     // Find the blocks that contains the interested units.
-    public static List<Block> findAllInterestedBlocks(CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies, Set<AssignStmt> entry_assigns){
+    public static List<Block> findAllInterestedBlocks(CompleteBlockGraph cbg, BU entry, List<Value> entry_value_copies, Set<AssignStmt> entry_assigns){
         List<Block> interested_blocks = new ArrayList<>();
         int store_param = entry.getParameters() == null? 1:0;
         for(Block block : cbg.getBlocks()){
@@ -601,7 +603,7 @@ public class AnalysisForUsingMethods extends Analysis{
 
     // For path-sensitive analysis.
     // Find the LCA block of all interested blocks (including the block in the interested blocks) .
-    public static Block findStartBlock(List<Block> interested_blocks, CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies,
+    public static Block findStartBlock(List<Block> interested_blocks, CompleteBlockGraph cbg, BU entry, List<Value> entry_value_copies,
                                        Map<Value, Value> newValueToCopy, Map<Value, String> numericValueToConcreteAssignment,
                                        Map<Value, String> valueToField, Map<Value, String> mapValueToTaintedItem,
                                        Set<Value> tainted_entry_attributes){
@@ -641,7 +643,7 @@ public class AnalysisForUsingMethods extends Analysis{
 
     // For path-insensitive analysis.
     // Find the first interested block.
-    public static Block findStartBlock(CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
+    public static Block findStartBlock(CompleteBlockGraph cbg, BU entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
                                        Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> valueToField,
                                        Map<Value, String> mapValueToTaintedItem, Set<Value> tainted_entry_attributes){
         if(cbg==null || entry_value_copies == null) return null;
@@ -726,6 +728,7 @@ public class AnalysisForUsingMethods extends Analysis{
             try {
                 if (!cls.getPackageName().contains("android")) continue; // Non Android package.
                 if (cls.isInterface()) continue;
+                if (cls.getName().equals(AnalysisForParsingClass2.parsedPackage_settings_class)) continue;
                 List<SootMethod> methods = cls.getMethods();
                 if(methods.isEmpty()){
                     continue;
@@ -735,7 +738,7 @@ public class AnalysisForUsingMethods extends Analysis{
                     SootMethod method = methods.get(i);
                     if (!method.isConcrete()) continue;
                     Body body = method.retrieveActiveBody();
-                    Tainted entry_point = new Tainted(method);
+                    BU entry_point = new BU(method);
                     List<Value> entry_values = new ArrayList<>();
                     Set<String> entry_elements = new HashSet<>();
                     Set<AssignStmt> entry_assigns = new HashSet<>();
@@ -821,9 +824,10 @@ public class AnalysisForUsingMethods extends Analysis{
 
         String[] skip_mds = {"isEmpty", "byteSizeOf", "size", "forEachPackage"};
         String[] skip_cls = {"com.android.internal.util.AnnotationValidations","java.io.PrintWriter", "android.os.AsyncTask"};
-        String[] pims = {"generateWithoutComponentsUnchecked", "assertPackageIsValid", "preparePackageLI", "scanPackageOnlyLI",
+        /*String[] pims = {"generateWithoutComponentsUnchecked", "assertPackageIsValid", "preparePackageLI", "scanPackageOnlyLI",
                          "addPackageInternal", "restorePermissionState", "shouldGrantPermissionByProtectionFlags",
-                         "grantRuntimePermissionInternal"}; // "setAllowlistedRestrictedPermissionsInternal"
+                         "grantRuntimePermissionInternal"}; // "setAllowlistedRestrictedPermissionsInternal"*/
+        String[] pims = {"preparePackageLI", "scanPackageOnlyLI"}; // "setAllowlistedRestrictedPermissionsInternal"
         skip_methods.addAll(new ArrayList<>(Arrays.asList(skip_mds)));
         skip_classes.addAll(new ArrayList<>(Arrays.asList(skip_cls)));
         path_insensitive_methods.addAll(new ArrayList<>(Arrays.asList(pims)));
@@ -835,11 +839,11 @@ public class AnalysisForUsingMethods extends Analysis{
         findEntryPoints(entryBridgesToElement, use_methods);
         System.out.println("Done");
         Utils.printPartingLine("+");
-
-        List<Tainted> analyzed_tainted_points = new ArrayList<>();
+        //Utils.pause();
+        List<BU> analyzed_tainted_points = new ArrayList<>();
 
         while (!tainted_points.isEmpty()) {
-            Tainted tainted_point = tainted_points.poll();
+            BU tainted_point = tainted_points.poll();
             SootMethod tainted_method = tainted_point.getMethod();
             String tainted_element = tainted_point.getOuterElement();
             Unit tainted_call_unit = tainted_point.getCallUnit();
@@ -863,12 +867,17 @@ public class AnalysisForUsingMethods extends Analysis{
                     SootMethod implemented_method = getImplementedMethodOfAbstractMethod(analysis_data, ifi, tainted_point);
                     tainted_point.setMethod(implemented_method);
                     Log.logData(analysis_data, Utils.generatePartingLine("+"));
+                } else {
+                    Utils.printPartingLine("!");
+                    System.out.println("Abstract method -- the declaring class is an abstract class, not an interface.");
+                    Utils.printPartingLine("!");
+                    exit(0);
                 }
             }
 
             String tainted_point_sig = generateTaintedPointSignature(tainted_point);
             int flag_analyzed = 0;
-            for (Tainted atp : analyzed_tainted_points) {
+            for (BU atp : analyzed_tainted_points) {
                 String atp_Sig = generateTaintedPointSignature(atp);
                 if (atp_Sig.equals(tainted_point_sig)) {
                     Log.logData(analysis_data, "This method has been analyzed.");
@@ -881,7 +890,7 @@ public class AnalysisForUsingMethods extends Analysis{
                     tainted_point.setDataStructures(structures); // The same tainted methods have the same data structures.
                     if (structures != null) {
                         SootMethod farthest_ancestor = tainted_method;
-                        List<Tainted> parents = tainted_point.getParents();
+                        List<BU> parents = tainted_point.getParents();
                         if(parents!=null && !parents.isEmpty()) {
                             farthest_ancestor = parents.get(0).getMethod();
                         }
@@ -890,13 +899,13 @@ public class AnalysisForUsingMethods extends Analysis{
                         }
                     }
                     // If this method tainted other methods, store their information.
-                    Set<Tainted> children = atp.getTaintedChildren();
+                    Set<BU> children = atp.getTaintedChildren();
                     tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
                     if (children != null) {
-                        List<Tainted> new_parents = Utils.deepCopy(tainted_point.getParents());
+                        List<BU> new_parents = Utils.deepCopy(tainted_point.getParents());
                         new_parents.add(tainted_point);
-                        for (Tainted child : children) {
-                            Tainted newly_tainted_point = new Tainted(child.getMethod(), child.getTaintedParamIndices(), tainted_element,
+                        for (BU child : children) {
+                            BU newly_tainted_point = new BU(child.getMethod(), child.getTaintedParamIndices(), tainted_element,
                                     new_parents, child.getCallUnit(), child.getTaintedMapItem());
                             newly_tainted_point.setTaintedAttributes(child.getTaintedAttributes());
                             tainted_points.offer(newly_tainted_point);
@@ -977,12 +986,12 @@ public class AnalysisForUsingMethods extends Analysis{
     }
 
 
-    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> path, int path_sensitive, Tainted entry, List<Value> entry_value_copies,
-                                                 Map<Value, Value> newValueToCopy, Map<Value, String> numericValueToConcreteAssignment,Set<Value> tainted_entry_attributes,
+    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> path, int path_sensitive, BU entry, List<Value> entry_value_copies,
+                                                 Map<Value, Value> newValueToCopy, Map<Value, String> numericValueToConcreteAssignment, Set<Value> tainted_entry_attributes,
                                                  Map<Value, String> taintedMapValueToTaintedItem, List<String> recorded_tainted_points, Map<Value, String> valueToField) {
         String entry_element = entry.getOuterElement();
         Unit start_unit = entry.getStartUnit();
-        List<Tainted> entry_parents = entry.getParents();
+        List<BU> entry_parents = entry.getParents();
         Set<AssignStmt> entry_assigns = entry.getEntryAssigns();
 
         // Copy the map.
@@ -1268,12 +1277,12 @@ public class AnalysisForUsingMethods extends Analysis{
                         if (!recorded_tainted_points.contains(tainted_point_sig)) { // This tainted point has not been stored.
                             Log.logData(analysis_data, "--- Record the tainted method: " + callee_name);
                             recorded_tainted_points.add(tainted_point_sig);
-                            Tainted child = new Tainted(callee, tainted_param_indices, unit, involved_tainted_mapItems);
+                            BU child = new BU(callee, tainted_param_indices, unit, involved_tainted_mapItems);
                             child.setTaintedAttributes(involved_tainted_attributes);
                             entry.storeTaintedChild(child);
-                            List<Tainted> parents = Utils.deepCopy(entry_parents);
+                            List<BU> parents = Utils.deepCopy(entry_parents);
                             parents.add(entry);
-                            Tainted newly_tainted_point = new Tainted(callee, tainted_param_indices, entry_element, parents, unit, involved_tainted_mapItems);
+                            BU newly_tainted_point = new BU(callee, tainted_param_indices, entry_element, parents, unit, involved_tainted_mapItems);
                             newly_tainted_point.setTaintedAttributes(involved_tainted_attributes);
                             tainted_points.offer(newly_tainted_point);
                         } else {
@@ -1382,7 +1391,7 @@ public class AnalysisForUsingMethods extends Analysis{
         }
     }
 
-    public static void dataFlowAnalysisForMethod(Tainted entry){
+    public static void dataFlowAnalysisForMethod(BU entry){
         SootMethod entry_method = entry.getMethod();
         Body body = null;
         if (entry_method.isConcrete()) {
@@ -1438,11 +1447,13 @@ public class AnalysisForUsingMethods extends Analysis{
         }
 
         Log.logData(analysis_data, "+ Entry value: " + entry_values);
+        Log.logData(analysis_data, "+ Entry element: " + entry.getOuterElement());
         Log.logData(analysis_data, "+ Entry map item: " + taintedMapValueToTaintedItem);
         Log.logData(analysis_data, "+ Entry attributes: " + tainted_entry_attributes);
         Utils.printPartingLine("=");
         System.out.println("+ Method: " + entry_method.getName());
         System.out.println("+ Entry value: " + entry_values);
+        System.out.println("+ Entry element: " + entry.getOuterElement());
         System.out.println("+ Entry map item: " + taintedMapValueToTaintedItem);
         System.out.println("+ Entry attributes: " + tainted_entry_attributes);
 
@@ -1542,7 +1553,7 @@ public class AnalysisForUsingMethods extends Analysis{
             SootMethod method = methods.get(i);
             if (!method.isConcrete()) continue;
             Body body = method.retrieveActiveBody();
-            Tainted entry_point = new Tainted(method);
+            BU entry_point = new BU(method);
             List<Value> entry_values = new ArrayList<>();
             Set<String> entry_elements = new HashSet<>();
             for (Unit unit : body.getUnits()) {

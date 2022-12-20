@@ -20,7 +20,7 @@ public class AnalysisForParsingClass extends Analysis {
     // The tainted_methods needed to be analysed.
     // Each object consists of <tainted method, tainted value, associated element>
     // Use queue to do BFS.
-    public static Queue<Tainted> tainted_points = new LinkedList<Tainted>();
+    public static Queue<BU> tainted_points = new LinkedList<BU>();
 
     // element name => data structures.
     public static Map<String, Set<String>> associatedElementToDataStructures = new HashMap<String, Set<String>>();
@@ -353,7 +353,7 @@ public class AnalysisForParsingClass extends Analysis {
         Log.logData(analysis_data, "--- Update the tainted value: " + tainted_values);
     }
 
-    public static Block findStartBlock(CompleteBlockGraph cbg, Tainted entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
+    public static Block findStartBlock(CompleteBlockGraph cbg, BU entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
                                        Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> stringValueToLikelyElement,
                                        Map<Value, String> valueToField, Map<Value, String> mapValueToTaintedItem){
         if(cbg==null || entry == null || entry_value_copies == null) return null;
@@ -410,14 +410,14 @@ public class AnalysisForParsingClass extends Analysis {
     // So, during analyzing, we treat the tainted / entry value as a whole,
     // ignore the part (ie., the attribute) of it.
     // The attributes are wrapped in the parsing result.
-    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> path, int path_sensitive, Tainted entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
+    public static void dataFlowAnalysisForBlocks(List<Block> blocks, List<Integer> path, int path_sensitive, BU entry, List<Value> entry_value_copies, Map<Value, Value> newValueToCopy,
                                                  Map<Value, String> numericValueToConcreteAssignment, Map<Value, String> mapValueToTaintedItem,
                                                  List<String> recorded_tainted_points, Map<Value, String> stringValueToLikelyElement,
                                                  Map<Value, String> valueToField) {
 
         String entry_element = entry.getOuterElement();
         Unit start_unit = entry.getStartUnit();
-        List<Tainted> entry_parents = entry.getParents();
+        List<BU> entry_parents = entry.getParents();
 
         // Copy the map.
         // Specific to this path.
@@ -702,13 +702,13 @@ public class AnalysisForParsingClass extends Analysis {
                             Log.logData(analysis_data, "--- Record the tainted method: " + callee_name);
                             recorded_tainted_points.add(tainted_point_sig);
                             // Store the tainted child.
-                            Tainted tainted_child = new Tainted(callee, tainted_param_indices, element, unit, involved_map_item); // This element only related to entry method.
+                            BU tainted_child = new BU(callee, tainted_param_indices, element, unit, involved_map_item); // This element only related to entry method.
                             entry.storeTaintedChild(tainted_child);
                             // Record the newly tainted point.
                             String associated_element = getAssociatedElement(entry_element, element); // This element related to entry method and its parents.
-                            List<Tainted> parents = Utils.deepCopy(entry_parents);
+                            List<BU> parents = Utils.deepCopy(entry_parents);
                             parents.add(entry);
-                            Tainted new_tainted_point = new Tainted(callee, tainted_param_indices, associated_element, parents, unit, involved_map_item);
+                            BU new_tainted_point = new BU(callee, tainted_param_indices, associated_element, parents, unit, involved_map_item);
                             tainted_points.offer(new_tainted_point);
                         } else {
                             Log.logData(analysis_data, "--- This tainted method has been recoded.");
@@ -787,7 +787,7 @@ public class AnalysisForParsingClass extends Analysis {
         }
     }
 
-    public static void dataFlowAnalysisForMethod(Tainted entry){
+    public static void dataFlowAnalysisForMethod(BU entry){
         SootMethod entry_method = entry.getMethod();
         Body body = null;
         if (entry_method.isConcrete()) {
@@ -979,7 +979,7 @@ public class AnalysisForParsingClass extends Analysis {
                     }
                 }
                 if(!entry_values.isEmpty()){
-                    Tainted entry = new Tainted(sm, entry_values);
+                    BU entry = new BU(sm, entry_values);
                     entry.setEntryAssigns(entry_assigns);
                     tainted_points.offer(entry);
                 }
@@ -1006,10 +1006,10 @@ public class AnalysisForParsingClass extends Analysis {
 
         findEntryPoints();
 
-        List<Tainted> analyzed_tainted_points = new ArrayList<>();
+        List<BU> analyzed_tainted_points = new ArrayList<>();
 
         while (!tainted_points.isEmpty()) {
-            Tainted tainted_point = tainted_points.poll();
+            BU tainted_point = tainted_points.poll();
             SootMethod tainted_method = tainted_point.getMethod();
             String tainted_element = tainted_point.getOuterElement();
             Unit tainted_call_unit = tainted_point.getCallUnit();
@@ -1031,7 +1031,7 @@ public class AnalysisForParsingClass extends Analysis {
 
             int flag_analyzed = 0;
             String tainted_point_sig = generateTaintedPointSignature(tainted_point);
-            for(Tainted atp : analyzed_tainted_points){
+            for(BU atp : analyzed_tainted_points){
                 String atp_sig = generateTaintedPointSignature(atp);
                 if(atp_sig.equals(tainted_point_sig)){
                     Log.logData(analysis_data, "This method has been analyzed.");
@@ -1048,15 +1048,15 @@ public class AnalysisForParsingClass extends Analysis {
                         }
                     }
                     // If this method tainted other methods, store their information.
-                    Set<Tainted> children = atp.getTaintedChildren();
+                    Set<BU> children = atp.getTaintedChildren();
                     tainted_point.setTaintedChildren(children); // The same tainted methods have the same tainted children.
                     if(children != null) {
-                        List<Tainted> parents = Utils.deepCopy(tainted_point.getParents());
+                        List<BU> parents = Utils.deepCopy(tainted_point.getParents());
                         parents.add(tainted_point);
-                        for (Tainted child : children) {
+                        for (BU child : children) {
                             String element = child.getOuterElement(); // This element only associate with the tainted method.
                             String associated_element = getAssociatedElement(tainted_element, element); // This element associate with the tainted method and its parents.
-                            Tainted newly_tainted_point = new Tainted(child.getMethod(), child.getTaintedParamIndices(), associated_element, parents, child.getCallUnit(), child.getTaintedMapItem());
+                            BU newly_tainted_point = new BU(child.getMethod(), child.getTaintedParamIndices(), associated_element, parents, child.getCallUnit(), child.getTaintedMapItem());
                             tainted_points.offer(newly_tainted_point);
                         }
                     }
@@ -1091,14 +1091,14 @@ public class AnalysisForParsingClass extends Analysis {
                     String type = ds.split(" ")[1];
                     if ((type.contains("Map") && ds.endsWith("value")) || type.contains("List") || type.contains("[]") || type.contains("Queue") || type.contains("Stack")) {
                         Log.logData(suspicious_structures, ds + "=>" + associated_element);
-                        for (Tainted point : analyzed_tainted_points) {
+                        for (BU point : analyzed_tainted_points) {
                             List<Pair<String, String>> e_ds = point.getInnerElementAndStructures();
                             for (Pair<String, String> e_d : e_ds) {
                                 String element = getAssociatedElement(point.getOuterElement(), e_d.getO1());
                                 if (associated_element.equals(element) && ds.equals(e_d.getO2())) {
                                     Log.logData(element_data, Utils.generatePartingLine("-"));
                                     Log.logData(element_data, "+ call path:");
-                                    for (Tainted parent : point.getParents()) {
+                                    for (BU parent : point.getParents()) {
                                         Log.logData(element_data, "--- " + parent.getMethod().getSignature());
                                     }
                                     Log.logData(element_data, "---" + point.getMethod().getSignature());
