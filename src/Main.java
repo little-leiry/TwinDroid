@@ -31,7 +31,7 @@ public class Main {
         }
         System.out.println(Analysis.store_base_path);
         //Utils.pause();
-        System.out.println("Loading (initialize) classes ...");
+        System.out.println("Loading (initializing) classes ...");
         start = System.currentTimeMillis();
         sootInitial_dex(android_code_path);
         System.out.println("Done.");
