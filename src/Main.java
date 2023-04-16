@@ -15,11 +15,9 @@ import static java.lang.Thread.sleep;
 public class Main {
     public static final String code_base_path_12 = "/data/disk_16t_2/leiry/android12_source/";
     public static final String dexCode_path_12 = code_base_path_12 + "DEX-12-framework/";
-    public static final String dexCode_path_lite_12 = code_base_path_12 + "systemCode/";
 
     public static final String code_base_path_11 = "/data/disk_16t_2/leiry/android11_source/";
     public static final String dexCode_path_11 = code_base_path_11 + "DEX-11-framework/";
-    public static final String dexCode_path_lite_11 = code_base_path_11 + "systemCode/";
 
     public static final String store_base_path_12 = "android12/";
     public static final String store_base_path_11 = "android11/";
@@ -57,7 +55,6 @@ public class Main {
         AnalysisForSystemClass2.identifySuspiciousMethods();
         end = System.currentTimeMillis();
         System.out.println("Stage 2: " + Utils.ms2DHMS(start, end));
-        //test3();
     }
 
     private static void sootInitial_dex(String code_path) {
