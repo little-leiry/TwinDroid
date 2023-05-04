@@ -10,8 +10,6 @@ import soot.toolkits.graph.CompleteBlockGraph;
 import java.io.*;
 import java.util.*;
 
-import static java.lang.Thread.sleep;
-
 public class Main {
     public static final String code_base_path_12 = "/data/disk_16t_2/leiry/android12_source/";
     public static final String dexCode_path_12 = code_base_path_12 + "DEX-12-framework/";
@@ -19,21 +17,21 @@ public class Main {
     public static final String code_base_path_11 = "/data/disk_16t_2/leiry/android11_source/";
     public static final String dexCode_path_11 = code_base_path_11 + "DEX-11-framework/";
 
-    public static final String store_base_path_12 = "android12/";
-    public static final String store_base_path_11 = "android11/";
-
-    public static void main(String[] args) throws IOException, InterruptedException {
+    public static void main(String[] args) {
         long start, end;
         Utils.printPartingLine("+");
-        String android_code_path = dexCode_path_12;
-        if(android_code_path.contains("android11")){
-            Analysis.store_base_path = "android11/";
+        int analyzed_android_version = 12;
+        String android_code_path = initializeAnalysisSettings(analyzed_android_version);
+        if(android_code_path == null){
+            String msg = "Unsupported android version: " + analyzed_android_version;
+            Utils.terminate(msg);
         }
-        System.out.println(Analysis.store_base_path);
+        System.out.println("Currently analyzed android version: " + analyzed_android_version + "\nAndroid DEX code path: " +
+                android_code_path + "\nAnalysis data storing path: " + Analysis.store_base_path);
         //Utils.pause();
         System.out.println("Loading (initializing) classes ...");
         start = System.currentTimeMillis();
-        sootInitial_dex(android_code_path);
+        loadClasses_dex(android_code_path);
         System.out.println("Done.");
         //Utils.printPartingLine("+");
         System.out.println("Initializing interface & abstract classes information ...");
@@ -55,32 +53,30 @@ public class Main {
         AnalysisForSystemClass2.identifySuspiciousMethods();
         end = System.currentTimeMillis();
         System.out.println("Stage 2: " + Utils.ms2DHMS(start, end));
+        //test3();
     }
 
-    private static void sootInitial_dex(String code_path) {
+    public static String initializeAnalysisSettings(int android_version){
+        String android_code_path = null;
+        switch (android_version){
+            case 11:
+                Analysis.store_base_path = "android11/";
+                android_code_path = dexCode_path_11;
+                break;
+            case 12:
+                Analysis.store_base_path = "android12/";
+                android_code_path = dexCode_path_lite_12;
+                break;
+        }
+        return android_code_path;
+    }
+
+    public static void loadClasses_dex(String code_path) {
         soot.G.reset();
-        // android.jar包位置
         Options.v().set_force_android_jar("lib/android31.jar");
-        // 处理java则为Options.src_prec_java，处理jar包则为src_prec_J
         Options.v().set_src_prec(Options.src_prec_apk);
-        // 该处测试用于apk，可注释
         Options.v().set_process_multiple_dex(true);
-        // 以下不用管
         Options.v().set_process_dir(Collections.singletonList(code_path));
-        Options.v().set_whole_program(true);
-        Options.v().set_allow_phantom_refs(true);
-        Options.v().set_output_format(Options.output_format_none);
-        Options.v().ignore_resolution_errors();
-        Scene.v().loadNecessaryClasses();
-    }
-
-    private static void sootInitial_java(String javaPath) {
-        soot.G.reset();
-        // android.jar包位置
-        Options.v().set_force_android_jar("lib/android31.jar");
-        Options.v().set_src_prec(Options.src_prec_class);
-        // 以下不用管
-        Options.v().set_process_dir(Collections.singletonList(javaPath));
         Options.v().set_whole_program(true);
         Options.v().set_allow_phantom_refs(true);
         Options.v().set_output_format(Options.output_format_none);
