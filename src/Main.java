@@ -53,7 +53,6 @@ public class Main {
         AnalysisForSystemClass2.identifySuspiciousMethods();
         end = System.currentTimeMillis();
         System.out.println("Stage 2: " + Utils.ms2DHMS(start, end));
-        //test3();
     }
 
     public static String initializeAnalysisSettings(int android_version){
