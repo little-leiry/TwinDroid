@@ -34,6 +34,6 @@ TwinDroid is `Java-style` and based on [`Soot`](https://soot-oss.github.io/soot/
 
 ------
 
-##### Notes:
+#### Notes:
 
-Adjust the package name of `ParsingPackageUtils` module if the Android version to be analyzed is not 11 or 12.
+Adjust the package name of the `ParsingPackageUtils` module if the Android version to be analyzed is not 11 or 12.
